@@ -1,0 +1,58 @@
+Determining if the CL_VERSION_2_0 exist failed with the following output:
+Change Dir: C:/Users/Nicholas/Documents/GitHub/MTI835/CMakeFiles/CMakeTmp
+
+Run Build Command:"nmake" "/NOLOGO" "cmTC_8b6c2\fast"
+	"C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\BIN\nmake.exe" -f CMakeFiles\cmTC_8b6c2.dir\build.make /nologo -L                  CMakeFiles\cmTC_8b6c2.dir\build
+Building C object CMakeFiles/cmTC_8b6c2.dir/CheckSymbolExists.c.obj
+	C:\PROGRA~2\MICROS~1.0\VC\bin\X86_AM~1\cl.exe  @C:\Users\Nicholas\AppData\Local\Temp\nm5ECD.tmp
+CheckSymbolExists.c
+C:\Users\Nicholas\Documents\GitHub\MTI835\CMakeFiles\CMakeTmp\CheckSymbolExists.c(8): error C2065: 'CL_VERSION_2_0': undeclared identifier
+NMAKE : fatal error U1077: 'C:\PROGRA~2\MICROS~1.0\VC\bin\X86_AM~1\cl.exe' : return code '0x2'
+Stop.
+NMAKE : fatal error U1077: '"C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\BIN\nmake.exe"' : return code '0x2'
+Stop.
+
+File C:/Users/Nicholas/Documents/GitHub/MTI835/CMakeFiles/CMakeTmp/CheckSymbolExists.c:
+/* */
+#include <C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v7.5/include/CL/cl.h>
+
+int main(int argc, char** argv)
+{
+  (void)argv;
+#ifndef CL_VERSION_2_0
+  return ((int*)(&CL_VERSION_2_0))[argc];
+#else
+  (void)argc;
+  return 0;
+#endif
+}
+
+Determining if the CL_VERSION_2_0 exist failed with the following output:
+Change Dir: C:/Users/Nicholas/Documents/GitHub/MTI835/CMakeFiles/CMakeTmp
+
+Run Build Command:"nmake" "/NOLOGO" "cmTC_74e0a\fast"
+	"C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\BIN\nmake.exe" -f CMakeFiles\cmTC_74e0a.dir\build.make /nologo -L                  CMakeFiles\cmTC_74e0a.dir\build
+Building C object CMakeFiles/cmTC_74e0a.dir/CheckSymbolExists.c.obj
+	C:\PROGRA~2\MICROS~1.0\VC\bin\X86_AM~1\cl.exe  @C:\Users\Nicholas\AppData\Local\Temp\nmAF54.tmp
+CheckSymbolExists.c
+C:\Users\Nicholas\Documents\GitHub\MTI835\CMakeFiles\CMakeTmp\CheckSymbolExists.c(8): error C2065: 'CL_VERSION_2_0': undeclared identifier
+NMAKE : fatal error U1077: 'C:\PROGRA~2\MICROS~1.0\VC\bin\X86_AM~1\cl.exe' : return code '0x2'
+Stop.
+NMAKE : fatal error U1077: '"C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\BIN\nmake.exe"' : return code '0x2'
+Stop.
+
+File C:/Users/Nicholas/Documents/GitHub/MTI835/CMakeFiles/CMakeTmp/CheckSymbolExists.c:
+/* */
+#include <C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v7.5/include/CL/cl.h>
+
+int main(int argc, char** argv)
+{
+  (void)argv;
+#ifndef CL_VERSION_2_0
+  return ((int*)(&CL_VERSION_2_0))[argc];
+#else
+  (void)argc;
+  return 0;
+#endif
+}
+
