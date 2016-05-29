@@ -1115,7 +1115,6 @@ void VulkanExampleBase::handleMessages(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
         mousePos.x = (float)LOWORD(lParam);
         mousePos.y = (float)HIWORD(lParam);
         pick((float)LOWORD(lParam),(float)HIWORD(lParam));
-        std::cout<<"double"<<std::endl;
         break;
 	case WM_LBUTTONDOWN:
         mousePos.x = (float)LOWORD(lParam);

@@ -84,7 +84,7 @@ public:
 	VulkanExample() : VulkanExampleBase(ENABLE_VALIDATION)
 	{
 		zoom = -5.0f;
-        rotation = glm::vec3(-35.0f, 25.0f, 0.0f);
+        rotation = glm::vec3(0.0f, 0.0f, 0.0f);
 		title = "Vulkan Example - Using pipelines";
 	}
 
@@ -584,7 +584,7 @@ groundTransform.setBasis(bob);
 		VkResult err = vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipelines.solidColor);
         assert(!err);
 
-        shaderStages[0] = loadShader(getAssetPath() + "shaders/pipelines/base.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+        shaderStages[0] = loadShader(getAssetPath() + "shaders/pipelines/basenoModel.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
         shaderStages[1] = loadShader(getAssetPath() + "shaders/pipelines/color.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
         pipelineCreateInfo.pStages = shaderStages.data();
 
@@ -644,9 +644,9 @@ groundTransform.setBasis(bob);
 		uboVS.viewMatrix = glm::translate(glm::mat4(), glm::vec3(0.0f, 0.0f, zoom));
 
 		uboVS.modelMatrix = glm::mat4();
-		uboVS.modelMatrix = glm::rotate(uboVS.modelMatrix, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
-		uboVS.modelMatrix = glm::rotate(uboVS.modelMatrix, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
-		uboVS.modelMatrix = glm::rotate(uboVS.modelMatrix, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+        uboVS.viewMatrix = glm::rotate(uboVS.viewMatrix, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
+        uboVS.viewMatrix = glm::rotate(uboVS.viewMatrix, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
+        uboVS.viewMatrix = glm::rotate(uboVS.viewMatrix, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
 
 		uint8_t *pData;
 		VkResult err = vkMapMemory(device, uniformDataVS.memory, 0, sizeof(uboVS), 0, (void **)&pData);
@@ -701,15 +701,13 @@ groundTransform.setBasis(bob);
                 uboVS.modelMatrix[0].z,uboVS.modelMatrix[1].z,uboVS.modelMatrix[2].z);
 
 groundTransform.setBasis(bob);
-        rBody->setWorldTransform(groundTransform);
+        //rBody->setWorldTransform(groundTransform);
 
         //rBody->getCollisionShape()->
 	}
 
     virtual void pick(float x, float y){
 
-
-        std::cout << "mouse " << x << " " << y <<  std::endl;
         float fw = (float)width;
         float fh = (float)height;
         float mx = (x-fw/3.0f)/(fw/3.0f);
@@ -720,68 +718,39 @@ groundTransform.setBasis(bob);
             -1.0, // The near plane maps to Z=-1 in Normalized Device Coordinates
             1.0f
         );
-        glm::vec4 lRayEnd_NDC(
-            (mx  - 0.5f) * 2.0f,
-            (2.0f * y)/ fh -1.0f,
-            0.0,
-            1.0f
-        );
 
         glm::vec4 ori(
             0.0f,
             0.0f,
-            5.0f,
+            0.0f,
             1.0f
         );
-
-        std::cout << "orginiNDC " << lRayStart_NDC.x << " " << lRayStart_NDC.y <<" " << lRayStart_NDC.z << std::endl;
-
 
         // Faster way (just one inverse)
         glm::mat4 M = glm::inverse(uboVS.projectionMatrix * uboVS.viewMatrix);
         glm::vec4 lRayStart_world = M * lRayStart_NDC; lRayStart_world/=lRayStart_world.w;
 
-         std::cout << "lRayEnd_NDC " << lRayStart_world.x << " " << lRayStart_world.y <<" " << lRayStart_world.z << std::endl;
-
-        glm::vec4 lRayEnd_world   = M * lRayEnd_NDC  ; lRayEnd_world  /=lRayEnd_world.w;
-
-        glm::vec3 lRayDir_world(lRayEnd_world - lRayStart_world);
-        glm::vec3 out_origin(lRayStart_world);
-        lRayDir_world = glm::normalize(lRayDir_world);
+        ori = glm::inverse(uboVS.viewMatrix)*ori; ori/=ori.w;
 
         glm::vec4 out_end = ori + (lRayStart_world-ori)*1000.0f;
 
-        /*btCollisionWorld::ClosestRayResultCallback RayCallback(
-            btVector3(out_origin.x, out_origin.y, out_origin.z),
+        btCollisionWorld::ClosestRayResultCallback RayCallback(
+            btVector3(ori.x, ori.y, ori.z),
             btVector3(out_end.x, out_end.y, out_end.z)
         );
         dynamicsWorld->rayTest(
-            btVector3(out_origin.x, out_origin.y, out_origin.z),
+            btVector3(ori.x, ori.y, ori.z),
             btVector3(out_end.x, out_end.y, out_end.z),
             RayCallback
-        );*/
-        btCollisionWorld::ClosestRayResultCallback RayCallback(
-            btVector3(0.0f, 0.0f, 5.0f),
-            btVector3(out_end.x, out_end.y, out_end.z)
         );
-        dynamicsWorld->rayTest(
-                    btVector3(0.0f, 0.0f, 5.0f),
-                    btVector3(out_end.x, out_end.y, out_end.z),
-            RayCallback
-        );
-
-        std::cout << "orgini " << out_origin.x << " " << out_origin.y <<" " << out_origin.z << std::endl;
-       std::cout << "end " << out_end.x << " " << out_end.y <<" " << out_end.z << std::endl;
 
         if(RayCallback.hasHit()) {
-             std::cout << "hit " << RayCallback.m_hitPointWorld.x() << " " << RayCallback.m_hitPointWorld.y() <<" " << RayCallback.m_hitPointWorld.z() << std::endl;
 
              for(int i=0;i<rigidBody.vertexs.size();i++){
                   rigidBody.vertexs.at(i).pos[0]+=RayCallback.m_hitPointWorld.x();
                   rigidBody.vertexs.at(i).pos[1]+=RayCallback.m_hitPointWorld.y();
                   rigidBody.vertexs.at(i).pos[2]+=RayCallback.m_hitPointWorld.z();
              }
-
 
              size_t size = rigidBody.vertexs.size() * sizeof(Vertex);
              memcpy(rigidBody.mappedMemory, rigidBody.vertexs.data(), size);
@@ -792,8 +761,10 @@ groundTransform.setBasis(bob);
                   rigidBody.vertexs.at(i).pos[2]-=RayCallback.m_hitPointWorld.z();
              }
 
-        }else{
-           std::cout << "background" << std::endl;
+        }
+        else{
+            size_t size = rigidBody.vertexs.size() * sizeof(Vertex);
+            memcpy(rigidBody.mappedMemory, rigidBody.vertexs.data(), size);
         }
     }
 
