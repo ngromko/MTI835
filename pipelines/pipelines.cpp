@@ -14,6 +14,7 @@
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#define GLM_RIGHT_HANDED
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <gli/gli.hpp>
@@ -23,53 +24,27 @@
 #include "vulkanexamplebase.h"
 
 #include "btBulletDynamicsCommon.h"
+#include "vulkancube.h"
 
 #define VERTEX_BUFFER_BIND_ID 0
-#define ENABLE_VALIDATION false
+#define ENABLE_VALIDATION true
 
-// Vertex layout for this example
-struct Vertex {
-	float pos[3];
-	float col[3];
-	float uv[2];
-	float normal[3];
-};
 
 class VulkanExample: public VulkanExampleBase 
 {
 private:
 	vkTools::VulkanTexture textureColorMap;
+    std::chrono::time_point<std::chrono::high_resolution_clock> tStart;
 public:
 	struct {
-		int count;
 		VkPipelineVertexInputStateCreateInfo inputState;
 		std::vector<VkVertexInputBindingDescription> bindingDescriptions;
 		std::vector<VkVertexInputAttributeDescription> attributeDescriptions;
 	} vertices;
 
-	struct {
-		vkMeshLoader::MeshBuffer cube;
-	} meshes;
-
     btDiscreteDynamicsWorld* dynamicsWorld;
-    btRigidBody* rBody;
 
-    struct {
-        VkBuffer buffer;
-        VkDeviceMemory memory;
-        // Store the mapped address of the particle data for reuse
-        void *mappedMemory;
-        std::vector<Vertex> vertexs;
-    } rigidBody;
-
-	vkTools::UniformData uniformDataVS;
-
-	// Same uniform buffer layout as shader
-	struct {
-		glm::mat4 projectionMatrix;
-		glm::mat4 modelMatrix;
-		glm::mat4 viewMatrix;
-	} uboVS;
+    std::vector<VulkanCube*> cubes;
 
 	VkPipelineLayout pipelineLayout;
 	VkDescriptorSet descriptorSet;
@@ -93,16 +68,11 @@ public:
 		// Clean up used Vulkan resources 
 		// Note : Inherited destructor cleans up resources stored in base class
 		vkDestroyPipeline(device, pipelines.solidColor, nullptr);
-		vkDestroyPipeline(device, pipelines.wireFrame, nullptr);
-		vkDestroyPipeline(device, pipelines.texture, nullptr);
+        //vkDestroyPipeline(device, pipelines.wireFrame, nullptr);
+        //vkDestroyPipeline(device, pipelines.texture, nullptr);
 		
 		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
-		vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
-
-		vkMeshLoader::freeMeshBufferResources(device, &meshes.cube);
-
-		vkDestroyBuffer(device, uniformDataVS.buffer, nullptr);
-		vkFreeMemory(device, uniformDataVS.memory, nullptr);
+        vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 
 		textureLoader->destroyTexture(textureColorMap);
 	}
@@ -115,84 +85,62 @@ public:
 			&textureColorMap);
 	}
 
-	void buildCommandBuffers()
-	{		 
-		VkCommandBufferBeginInfo cmdBufInfo = vkTools::initializers::commandBufferBeginInfo();
+    void buildCommandBuffers()
+    {
+        VkCommandBufferBeginInfo cmdBufInfo = vkTools::initializers::commandBufferBeginInfo();
 
-		VkClearValue clearValues[2];
-		clearValues[0].color = defaultClearColor;
-		clearValues[1].depthStencil = { 1.0f, 0 };
+        VkClearValue clearValues[2];
+        clearValues[0].color = defaultClearColor;
+        clearValues[1].depthStencil = { 1.0f, 0 };
 
-		VkRenderPassBeginInfo renderPassBeginInfo = vkTools::initializers::renderPassBeginInfo();
-		renderPassBeginInfo.renderPass = renderPass;
-		renderPassBeginInfo.renderArea.offset.x = 0;
-		renderPassBeginInfo.renderArea.offset.y = 0;
-		renderPassBeginInfo.renderArea.extent.width = width;
-		renderPassBeginInfo.renderArea.extent.height = height;
-		renderPassBeginInfo.clearValueCount = 2;
-		renderPassBeginInfo.pClearValues = clearValues;
+        VkRenderPassBeginInfo renderPassBeginInfo = vkTools::initializers::renderPassBeginInfo();
+        renderPassBeginInfo.renderPass = renderPass;
+        renderPassBeginInfo.renderArea.offset.x = 0;
+        renderPassBeginInfo.renderArea.offset.y = 0;
+        renderPassBeginInfo.renderArea.extent.width = width;
+        renderPassBeginInfo.renderArea.extent.height = height;
+        renderPassBeginInfo.clearValueCount = 2;
+        renderPassBeginInfo.pClearValues = clearValues;
 
-		VkResult err;
+        VkResult err;
 
-		for (int32_t i = 0; i < drawCmdBuffers.size(); ++i)
-		{
-			// Set target frame buffer
-			renderPassBeginInfo.framebuffer = frameBuffers[i];
+        for (int32_t i = 0; i < drawCmdBuffers.size(); ++i)
+        {
+            // Set target frame buffer
+            renderPassBeginInfo.framebuffer = frameBuffers[i];
 
-			err = vkBeginCommandBuffer(drawCmdBuffers[i], &cmdBufInfo);
-			assert(!err);
+            err = vkBeginCommandBuffer(drawCmdBuffers[i], &cmdBufInfo);
+            assert(!err);
 
-			vkCmdBeginRenderPass(drawCmdBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+            vkCmdBeginRenderPass(drawCmdBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
             VkViewport viewport = vkTools::initializers::viewport(
-                (float)600.0f,
-				(float)height,
-				0.0f,
-				1.0f);
-            //vkCmdSetViewport(drawCmdBuffers[i], 0, 1, &viewport);
+                (float)width,
+                (float)height,
+                0.0f,
+                1.0f);
+            vkCmdSetViewport(drawCmdBuffers[i], 0, 1, &viewport);
 
-			VkRect2D scissor = vkTools::initializers::rect2D(
-				width,
-				height,
-				0,
-				0);
-            //vkCmdSetScissor(drawCmdBuffers[i], 0, 1, &scissor);
+            VkRect2D scissor = vkTools::initializers::rect2D(
+                width,
+                height,
+                0,
+                0);
+            vkCmdSetScissor(drawCmdBuffers[i], 0, 1, &scissor);
 
-			vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, NULL);
-
-			VkDeviceSize offsets[1] = { 0 };
-            vkCmdBindVertexBuffers(drawCmdBuffers[i], VERTEX_BUFFER_BIND_ID, 1, &rigidBody.buffer, offsets);
-
-			vkCmdSetLineWidth(drawCmdBuffers[i], 2.0f);
-
-			// Left : Solid colored 
-            viewport.x = (float)width / 3.0;
-            viewport.width = (float)width / 3.0;
-			vkCmdSetViewport(drawCmdBuffers[i], 0, 1, &viewport);
             vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.solidColor);
-			
-			vkCmdDraw(drawCmdBuffers[i], vertices.count, 1, 0, 0);
 
-			// Center : Textured
-			viewport.x = (float)width / 3.0;
-            vkCmdBindVertexBuffers(drawCmdBuffers[i], VERTEX_BUFFER_BIND_ID, 1, &meshes.cube.vertices.buf, offsets);
-			vkCmdSetViewport(drawCmdBuffers[i], 0, 1, &viewport);
-			vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.texture);
-			vkCmdSetLineWidth(drawCmdBuffers[i], 2.0f);
-			vkCmdDraw(drawCmdBuffers[i], vertices.count, 1, 0, 0);
+            for (auto& cube : cubes)
+            {
+                cube->draw(drawCmdBuffers[i], pipelineLayout);
+            }
 
-			// Right : Wireframe 
-			viewport.x = (float)width / 3.0 + (float)width / 3.0;
-			vkCmdSetViewport(drawCmdBuffers[i], 0, 1, &viewport);
-			vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.wireFrame);
-			vkCmdDraw(drawCmdBuffers[i], vertices.count, 1, 0, 0);
+            vkCmdEndRenderPass(drawCmdBuffers[i]);
 
-			vkCmdEndRenderPass(drawCmdBuffers[i]);
-
-			err = vkEndCommandBuffer(drawCmdBuffers[i]);
-			assert(!err);
-		}
-	}
+            err = vkEndCommandBuffer(drawCmdBuffers[i]);
+            assert(!err);
+        }
+    }
     
     void buildBulletScene(){
         ///collision configuration contains default setup for memory, collision setup. Advanced users can create their own configuration.
@@ -211,49 +159,9 @@ public:
 
         dynamicsWorld->setGravity(btVector3(0,-10,0));
 
-        btCollisionShape* groundShape = new btBoxShape(btVector3(btScalar(1.),btScalar(1.),btScalar(1.)));
-
-        btVector3 localInertia(0,0,0);
-
-        btTransform groundTransform;
-        groundTransform.setIdentity();
-
-        btQuaternion qut = btQuaternion(btVector3(1,0,0),glm::radians(rotation.x));
-
-        qut += btQuaternion(btVector3(0,1,0),glm::radians(rotation.y));
-
-        qut += btQuaternion(btVector3(0,0,1),glm::radians(rotation.z));
-        //groundTransform.setRotation(qut);
-
-        btMatrix3x3 bob = btMatrix3x3(uboVS.modelMatrix[0].x,uboVS.modelMatrix[1].x,uboVS.modelMatrix[2].x,
-                uboVS.modelMatrix[0].y,uboVS.modelMatrix[1].y,uboVS.modelMatrix[2].y,
-                uboVS.modelMatrix[0].z,uboVS.modelMatrix[1].z,uboVS.modelMatrix[2].z);
-
-groundTransform.setBasis(bob);
-
-        btDefaultMotionState* myMotionState = new btDefaultMotionState(groundTransform);
-
-        btRigidBody::btRigidBodyConstructionInfo rbInfo(0.,myMotionState,groundShape,localInertia);
-        rBody = new btRigidBody(rbInfo);
-        //add the body to the dynamics world
-        dynamicsWorld->addRigidBody(rBody);
-
-        btVector3 bobo = rBody->getWorldTransform().getOrigin();
-        std::cout << " box ori " << bobo.x() << " " << bobo.y() << " " << bobo.z() << std::endl;
-
-        bob = rBody->getWorldTransform().getBasis();
-
-        bobo = bob*btVector3(1,1,1);
-
-        std::cout << " trans ori1 " << bobo.x() << " " << bobo.y() << " " << bobo.z() << std::endl;
-
-        glm::vec4 tob = glm::vec4(1,1,1,1);
-
-        tob = uboVS.modelMatrix*tob;
-
-        std::cout << " trans ori2 " << tob.x << " " << tob.y << " " << tob.z << std::endl;
-
-
+       for(auto& cube : cubes){
+           dynamicsWorld->addRigidBody(cube->getRigidBody());
+       }
     }
 
 	void draw()
@@ -283,93 +191,15 @@ groundTransform.setBasis(bob);
 		assert(!err);
 	}
 
-	// Create vertices and buffers for uv mapped cube
-	void generateCube()
-	{
-
-		// Setup vertices
-#define colred { 1.0f, 0.0f, 0.0f }
-#define colgreen { 0.0f, 1.0f, 0.0f }
-#define colblue { 0.0f, 0.0f, 1.0f }
-#define d 1.0f
-
-		std::vector<Vertex> vertexBuffer = {
-
-			// -Y
-			{ { d,-d, d }, colred,{ 1.0, 1.0 }, { 0.0f, 1.0f, 0.0f } },
-			{ { -d,-d,-d }, colred,{ 0.0, 0.0 },{ 0.0f, 1.0f, 0.0f } },
-			{ { d,-d,-d }, colred,{ 1.0, 0.0 },{ 0.0f, 1.0f, 0.0f } },
-			{ { d,-d, d }, colred,{ 1.0, 1.0 },{ 0.0f, 1.0f, 0.0f } },
-			{ { -d,-d, d }, colred,{ 0.0, 1.0 },{ 0.0f, 1.0f, 0.0f } },
-			{ { -d,-d,-d }, colred,{ 0.0, 0.0 },{ 0.0f, 1.0f, 0.0f } },
-			// +Y
-			{ { d, d, d }, colred,{ 1.0, 1.0 },{ 0.0f, -1.0f, 0.0f } },
-			{ { d, d,-d }, colred,{ 1.0, 0.0 },{ 0.0f, -1.0f, 0.0f } },
-			{ { -d, d,-d }, colred,{ 0.0, 0.0 },{ 0.0f, -1.0f, 0.0f } },
-			{ { d, d, d }, colred,{ 1.0, 1.0 },{ 0.0f, -1.0f, 0.0f } },
-			{ { -d, d,-d }, colred,{ 0.0, 0.0 },{ 0.0f, -1.0f, 0.0f } },
-			{ { -d, d, d }, colred,{ 0.0, 1.0 },{ 0.0f, -1.0f, 0.0f } },
-			// -X
-			{ { -d,-d,-d }, colblue,{ 0.0, 0.0 },{ -1.0f, 0.0f, 0.0f } },
-			{ { -d,-d, d }, colblue,{ 0.0, 1.0 },{ -1.0f, 0.0f, 0.0f } },
-			{ { -d, d, d }, colblue,{ 1.0, 1.0 },{ -1.0f, 0.0f, 0.0f } },
-			{ { -d,-d,-d }, colblue,{ 0.0, 0.0 },{ -1.0f, 0.0f, 0.0f } },
-			{ { -d, d, d }, colblue,{ 1.0, 1.0 },{ -1.0f, 0.0f, 0.0f } },
-			{ { -d, d,-d }, colblue,{ 1.0, 0.0 },{ -1.0f, 0.0f, 0.0f } },
-			// +X
-			{ { d, d, d }, colblue,{ 1.0, 1.0 },{ 1.0f, 0.0f, 0.0f } },
-			{ { d,-d,-d }, colblue,{ 0.0, 0.0 },{ 1.0f, 0.0f, 0.0f } },
-			{ { d, d,-d }, colblue,{ 1.0, 0.0 },{ 1.0f, 0.0f, 0.0f } },
-			{ { d,-d,-d }, colblue,{ 0.0, 0.0 },{ 1.0f, 0.0f, 0.0f } },
-			{ { d, d, d }, colblue,{ 1.0, 1.0 },{ 1.0f, 0.0f, 0.0f } },
-			{ { d,-d, d }, colblue,{ 0.0, 1.0 },{ 1.0f, 0.0f, 0.0f } },
-			// -Z
-			{ { d, d,-d }, colgreen,{ 1.0, 1.0 },{ 0.0f, 0.0f, -1.0f } },
-			{ { -d,-d,-d }, colgreen,{ 0.0, 0.0 },{ 0.0f, 0.0f, -1.0f } },
-			{ { -d, d,-d }, colgreen,{ 0.0, 1.0 },{ 0.0f, 0.0f, -1.0f } },
-			{ { d, d,-d }, colgreen,{ 1.0, 1.0 },{ 0.0f, 0.0f, -1.0f } },
-			{ { d,-d,-d }, colgreen,{ 1.0, 0.0 },{ 0.0f, 0.0f, -1.0f } },
-			{ { -d,-d,-d }, colgreen,{ 0.0, 0.0 },{ 0.0f, 0.0f, -1.0f } },
-			// +Z
-			{ { -d, d, d }, colgreen,{ 0.0, 1.0 },{ 0.0f, 0.0f, 1.0f } },
-			{ { -d,-d, d }, colgreen,{ 0.0, 0.0 },{ 0.0f, 0.0f, 1.0f } },
-			{ { d,-d, d }, colgreen,{ 1.0, 0.0 },{ 0.0f, 0.0f, 1.0f } },
-			{ { d, d, d }, colgreen,{ 1.0, 1.0 },{ 0.0f, 0.0f, 1.0f } },
-			{ { -d, d, d }, colgreen,{ 0.0, 1.0 },{ 0.0f, 0.0f, 1.0f } },
-			{ { d,-d, d }, colgreen,{ 1.0, 0.0 },{ 0.0f, 0.0f, 1.0f } }
-
-		};
-#undef d
-
-		vertices.count = vertexBuffer.size();
-
-		createBuffer(
-			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-			vertexBuffer.size() * sizeof(Vertex),
-			vertexBuffer.data(),
-			&meshes.cube.vertices.buf,
-            &meshes.cube.vertices.mem);
-
-        for(int i=0;i<vertexBuffer.size();i++){
-            vertexBuffer.at(i).pos[0]/=20;
-            vertexBuffer.at(i).pos[1]/=20;
-            vertexBuffer.at(i).pos[2]/=20;
-        }
-        createBuffer(
-            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-            vertexBuffer.size() * sizeof(Vertex),
-            vertexBuffer.data(),
-            &rigidBody.buffer,
-            &rigidBody.memory);
-
-        rigidBody.vertexs = vertexBuffer;
-
-        VkResult err = vkMapMemory(device, rigidBody.memory, 0, vertexBuffer.size() * sizeof(Vertex), 0, &rigidBody.mappedMemory);
-        assert(!err);
-	}
-
 	void prepareVertices()
 	{
+
+        cubes.push_back(new VulkanCube(device,this,10,glm::vec3(0,-10.5,0),0));
+
+        cubes.push_back(new VulkanCube(device,this,0.5,glm::vec3(0,0,0),0));
+
+        cubes.push_back(new VulkanCube(device,this,0.5,glm::vec3(0.5,2,0.5),1));
+
 		// Binding description
 		vertices.bindingDescriptions.resize(1);
 		vertices.bindingDescriptions[0] =
@@ -395,14 +225,14 @@ groundTransform.setBasis(bob);
 				1,
 				VK_FORMAT_R32G32B32_SFLOAT,
 				sizeof(float) * 3);
-		// Location 3 : Texture coordinates
+        // Location 2 : Texture coordinates
 		vertices.attributeDescriptions[2] =
 			vkTools::initializers::vertexInputAttributeDescription(
 				VERTEX_BUFFER_BIND_ID,
 				2,
 				VK_FORMAT_R32G32_SFLOAT,
 				sizeof(float) * 6);
-		// Location 2 : Normal
+        // Location 3 : Normal
 		vertices.attributeDescriptions[3] =
 			vkTools::initializers::vertexInputAttributeDescription(
 				VERTEX_BUFFER_BIND_ID,
@@ -422,15 +252,15 @@ groundTransform.setBasis(bob);
 		// Example uses one ubo and one combined image sampler 
 		std::vector<VkDescriptorPoolSize> poolSizes =
 		{
-			vkTools::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1),
-			vkTools::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1),
+            vkTools::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, cubes.size()),
+            //vkTools::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1),
 		};
 
 		VkDescriptorPoolCreateInfo descriptorPoolInfo =
 			vkTools::initializers::descriptorPoolCreateInfo(
 				poolSizes.size(),
 				poolSizes.data(),
-				2);
+                cubes.size());
 
 		VkResult vkRes = vkCreateDescriptorPool(device, &descriptorPoolInfo, nullptr, &descriptorPool);
 		assert(!vkRes);
@@ -446,10 +276,10 @@ groundTransform.setBasis(bob);
 				VK_SHADER_STAGE_VERTEX_BIT,
 				0),
 			// Binding 1 : Fragment shader image sampler
-			vkTools::initializers::descriptorSetLayoutBinding(
+            /*vkTools::initializers::descriptorSetLayoutBinding(
 				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 				VK_SHADER_STAGE_FRAGMENT_BIT,
-				1),
+                1),*/
 		};
 
 		VkDescriptorSetLayoutCreateInfo descriptorLayout =
@@ -469,42 +299,13 @@ groundTransform.setBasis(bob);
 		assert(!err);
 	}
 
-	void setupDescriptorSet()
-	{
-		VkDescriptorSetAllocateInfo allocInfo =
-			vkTools::initializers::descriptorSetAllocateInfo(
-				descriptorPool,
-				&descriptorSetLayout,
-				1);
-
-		VkResult vkRes = vkAllocateDescriptorSets(device, &allocInfo, &descriptorSet);
-		assert(!vkRes);
-
-		// Color map image descriptor
-		VkDescriptorImageInfo texDescriptorColorMap =
-			vkTools::initializers::descriptorImageInfo(
-				textureColorMap.sampler,
-				textureColorMap.view,
-				VK_IMAGE_LAYOUT_GENERAL);
-
-		std::vector<VkWriteDescriptorSet> writeDescriptorSets =
-		{
-			// Binding 0 : Vertex shader uniform buffer
-			vkTools::initializers::writeDescriptorSet(
-			descriptorSet,
-				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-				0,
-				&uniformDataVS.descriptor),
-			// Binding 1 : Fragment shader image sampler
-			vkTools::initializers::writeDescriptorSet(
-				descriptorSet,
-				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-				1,
-				&texDescriptorColorMap)
-		};
-
-		vkUpdateDescriptorSets(device, writeDescriptorSets.size(), writeDescriptorSets.data(), 0, NULL);
-	}
+    void setupDescriptorSets()
+    {
+        for (auto& cube : cubes)
+        {
+            cube->setupDescriptorSet(descriptorPool, descriptorSetLayout);
+        }
+    }
 
 	void preparePipelines()
 	{
@@ -517,7 +318,7 @@ groundTransform.setBasis(bob);
 		VkPipelineRasterizationStateCreateInfo rasterizationState =
 			vkTools::initializers::pipelineRasterizationStateCreateInfo(
 				VK_POLYGON_MODE_FILL,
-				VK_CULL_MODE_FRONT_BIT,
+                VK_CULL_MODE_NONE,
 				VK_FRONT_FACE_CLOCKWISE,
 				0);
 
@@ -560,7 +361,7 @@ groundTransform.setBasis(bob);
 		// Load shaders
 		std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages;
 
-        shaderStages[0] = loadShader(getAssetPath() + "shaders/pipelines/basenoModel.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+        shaderStages[0] = loadShader(getAssetPath() + "shaders/pipelines/base.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
 		shaderStages[1] = loadShader(getAssetPath() + "shaders/pipelines/color.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
 	
 		VkGraphicsPipelineCreateInfo pipelineCreateInfo =
@@ -584,7 +385,7 @@ groundTransform.setBasis(bob);
 		VkResult err = vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipelines.solidColor);
         assert(!err);
 
-        shaderStages[0] = loadShader(getAssetPath() + "shaders/pipelines/basenoModel.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+       /* shaderStages[0] = loadShader(getAssetPath() + "shaders/pipelines/base.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
         shaderStages[1] = loadShader(getAssetPath() + "shaders/pipelines/color.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
         pipelineCreateInfo.pStages = shaderStages.data();
 
@@ -604,56 +405,23 @@ groundTransform.setBasis(bob);
 		// Use different fragment shader
 		shaderStages[1] = loadShader(getAssetPath() + "shaders/pipelines/wireframe.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
 		err = vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipelines.wireFrame);
-		assert(!err);
-	}
-
-	// Prepare and initialize uniform buffer containing shader uniforms
-	void prepareUniformBuffers()
-	{
-		VkResult err;
-
-		// Vertex shader uniform buffer block
-		VkMemoryAllocateInfo allocInfo = vkTools::initializers::memoryAllocateInfo();
-		VkMemoryRequirements memReqs;
-
-		VkBufferCreateInfo bufferInfo = vkTools::initializers::bufferCreateInfo(
-			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-			sizeof(uboVS));
-
-		err = vkCreateBuffer(device, &bufferInfo, nullptr, &uniformDataVS.buffer);
-		assert(!err);
-		vkGetBufferMemoryRequirements(device, uniformDataVS.buffer, &memReqs);
-		allocInfo.allocationSize = memReqs.size;
-		getMemoryType(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, &allocInfo.memoryTypeIndex);
-		err = vkAllocateMemory(device, &allocInfo, nullptr, &uniformDataVS.memory);
-		assert(!err);
-		err = vkBindBufferMemory(device, uniformDataVS.buffer, uniformDataVS.memory, 0);
-		assert(!err);
-
-		uniformDataVS.descriptor.buffer = uniformDataVS.buffer;
-		uniformDataVS.descriptor.offset = 0;
-		uniformDataVS.descriptor.range = sizeof(uboVS);
-
-		updateUniformBuffers();
+        assert(!err);*/
 	}
 
 	void updateUniformBuffers()
 	{
-		uboVS.projectionMatrix = glm::perspective(glm::radians(60.0f), (float)(width / 3.0f) / (float)height, 0.1f, 256.0f);
-
-		uboVS.viewMatrix = glm::translate(glm::mat4(), glm::vec3(0.0f, 0.0f, zoom));
-
-		uboVS.modelMatrix = glm::mat4();
-        uboVS.viewMatrix = glm::rotate(uboVS.viewMatrix, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
-        uboVS.viewMatrix = glm::rotate(uboVS.viewMatrix, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
-        uboVS.viewMatrix = glm::rotate(uboVS.viewMatrix, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
-
-		uint8_t *pData;
-		VkResult err = vkMapMemory(device, uniformDataVS.memory, 0, sizeof(uboVS), 0, (void **)&pData);
-		assert(!err);
-		memcpy(pData, &uboVS, sizeof(uboVS));
-		vkUnmapMemory(device, uniformDataVS.memory);
-		assert(!err);
+        glm::mat4 proj = glm::perspective(glm::radians(60.0f), (float)(width) / (float)height, 0.1f, 256.0f);
+        glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 5),glm::vec3(0,0,0),glm::vec3(0,1,0));
+        //view = glm::lookAtLH(glm::vec3(0.0f, 0.0f, zoom),glm::vec3(0,0,0),glm::vec3(0,-1,0));
+        view = glm::scale(view,glm::vec3(1,-1,1));
+        //uboVS.modelMatrix = glm::mat4();
+        view = glm::rotate(view, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
+        view = glm::rotate(view, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
+        view = glm::rotate(view, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+        for (auto& cube : cubes)
+        {
+            cube->updateUniformBuffer(proj,view);
+        }
 	}
 
 	void prepare()
@@ -661,19 +429,39 @@ groundTransform.setBasis(bob);
 		VulkanExampleBase::prepare();
 		loadTextures();
 		prepareVertices();
-		prepareUniformBuffers();
 		setupDescriptorSetLayout();
-		generateCube();
 		preparePipelines();
 		setupDescriptorPool();
-		setupDescriptorSet();
+        setupDescriptorSets();
 		buildCommandBuffers();
         buildBulletScene();
+
+        glm::mat4 proj = glm::perspective(glm::radians(60.0f), (float)width / (float)height, 0.1f, 256.0f);
+        glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 5),glm::vec3(0,0,0),glm::vec3(0,1,0));
+        view = glm::scale(view,glm::vec3(1,-1,1));
+
+        for (auto& cube : cubes)
+        {
+            cube->updateUniformBuffer(proj,view);
+        }
+
 		prepared = true;
 	}
 
 	virtual void render()
 	{
+        auto tEnd = std::chrono::high_resolution_clock::now();
+        auto tDiff = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
+        if((float)tDiff>17){
+            dynamicsWorld->stepSimulation(1.f/60.f,10);
+
+            for (auto& cube : cubes)
+            {
+                cube->update();
+            }
+            tStart = std::chrono::high_resolution_clock::now();
+        }
+
 		if (!prepared)
 			return;
 		vkDeviceWaitIdle(device);
@@ -683,32 +471,12 @@ groundTransform.setBasis(bob);
 
 	virtual void viewChanged()
 	{
-		updateUniformBuffers();
-        btTransform groundTransform;
-        groundTransform.setIdentity();
-
-        btQuaternion qut = btQuaternion(btVector3(1,0,0),glm::radians(rotation.x));
-
-        qut += btQuaternion(btVector3(0,1,0),glm::radians(rotation.y));
-
-        qut += btQuaternion(btVector3(0,0,1),glm::radians(rotation.z));
-        //groundTransform.setRotation(qut);
-
-        btDefaultMotionState* myMotionState = new btDefaultMotionState(groundTransform);
-
-        btMatrix3x3 bob = btMatrix3x3(uboVS.modelMatrix[0].x,uboVS.modelMatrix[1].x,uboVS.modelMatrix[2].x,
-                uboVS.modelMatrix[0].y,uboVS.modelMatrix[1].y,uboVS.modelMatrix[2].y,
-                uboVS.modelMatrix[0].z,uboVS.modelMatrix[1].z,uboVS.modelMatrix[2].z);
-
-groundTransform.setBasis(bob);
-        //rBody->setWorldTransform(groundTransform);
-
-        //rBody->getCollisionShape()->
+        updateUniformBuffers();
 	}
 
     virtual void pick(float x, float y){
 
-        float fw = (float)width;
+        /*float fw = (float)width;
         float fh = (float)height;
         float mx = (x-fw/3.0f)/(fw/3.0f);
 
@@ -765,7 +533,7 @@ groundTransform.setBasis(bob);
         else{
             size_t size = rigidBody.vertexs.size() * sizeof(Vertex);
             memcpy(rigidBody.mappedMemory, rigidBody.vertexs.data(), size);
-        }
+        }*/
     }
 
 };
