@@ -114,7 +114,7 @@ protected:
 	///internal update revision number. It will be increased when the object changes. This allows some subsystems to perform lazy evaluation.
 	int			m_updateRevision;
 
-
+    bool selectable = false;
 public:
 
 	BT_DECLARE_ALIGNED_ALLOCATOR();
@@ -287,6 +287,10 @@ public:
 	{
 		return ((getActivationState() != ISLAND_SLEEPING) && (getActivationState() != DISABLE_SIMULATION));
 	}
+
+    bool isSelectable() const{
+        return selectable;
+    }
 
 	void	setRestitution(btScalar rest)
 	{

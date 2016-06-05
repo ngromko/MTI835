@@ -7,12 +7,12 @@ set(NAME MTI835-NG)
 project(${NAME})
 find_package(OpenCL REQUIRED)
 include_directories(external)
+include_directories(headers)
 include_directories(external/glm)
 include_directories(external/gli)
 include_directories(external/assimp)
 include_directories(external/bullet3)
 include_directories(base)
-#include_directories("C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v7.5\\include")
 include_directories(${OpenCL_INCLUDE_DIRS})
 
 IF(WIN32)
@@ -48,13 +48,14 @@ file(GLOB SOURCE *.cpp base/*.cpp)
 
 # Function for building single example
 function(buildExample EXAMPLE_NAME)
-        file(GLOB SOURCE *.cpp base/*.cpp ${EXAMPLE_NAME}/*.cpp)
-        file(GLOB_RECURSE bullet bullet3/*.cpp)
+        file(GLOB SOURCE *.cpp base/*.cpp src/*.cpp)
+        file(GLOB_RECURSE bullet external/bullet3/*.cpp)
+        file(GLOB_RECURSE headers headers/*.h)
 	if(WIN32)
-                add_executable(${EXAMPLE_NAME} WIN32 ${EXAMPLE_NAME}/${EXAMPLE_NAME}.cpp ${SOURCE} ${bullet})
-                target_link_libraries(${EXAMPLE_NAME} ${VULKAN_LIB} ${ASSIMP_LIBRARIES} ${WINLIBS} ${OpenCL_LIBRARIES} ${BULLET_LIBRAIRIES1} ${BULLET_LIBRAIRIES2})
+                add_executable(${EXAMPLE_NAME} WIN32 src/${EXAMPLE_NAME}.cpp ${SOURCE} ${bullet} ${headers})
+                target_link_libraries(${EXAMPLE_NAME} ${VULKAN_LIB} ${ASSIMP_LIBRARIES} ${WINLIBS} ${OpenCL_LIBRARIES})
 	else(WIN32)
-		add_executable(${EXAMPLE_NAME} ${EXAMPLE_NAME}/${EXAMPLE_NAME}.cpp ${SOURCE})
+                add_executable(${EXAMPLE_NAME} src/${EXAMPLE_NAME}.cpp ${SOURCE})
                 target_link_libraries(${EXAMPLE_NAME} ${VULKAN_LIB} ${ASSIMP_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} $(BULLET_LIBRAIRIES) $(BULLET_LIBRAIRIES1) $(BULLET_LIBRAIRIES2))
 	endif(WIN32)
 endfunction(buildExample)
@@ -80,7 +81,7 @@ ENDIF(WIN32)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "bin/")
 
 set(EXAMPLES 
-	pipelines
+        main
 )
 
 buildExamples()

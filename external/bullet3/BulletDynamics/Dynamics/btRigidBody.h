@@ -174,6 +174,8 @@ public:
 	///btRigidBody constructor using construction info
 	btRigidBody(	const btRigidBodyConstructionInfo& constructionInfo);
 
+    btRigidBody(	const btRigidBodyConstructionInfo& constructionInfo,bool selectable);
+
 	///btRigidBody constructor for backwards compatibility. 
 	///To specify friction (etc) during rigid body construction, please use the other constructor (using btRigidBodyConstructionInfo)
 	btRigidBody(	btScalar mass, btMotionState* motionState, btCollisionShape* collisionShape, const btVector3& localInertia=btVector3(0,0,0));

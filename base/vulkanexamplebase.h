@@ -51,8 +51,8 @@
 
 class VulkanExampleBase
 {
-private:	
-	// Set to true when example is created with enabled validation layers
+private:	  
+    // Set to true when example is created with enabled validation layers
 	bool enableValidation = false;
 	// Set to true when the debug marker extension is detected
 	bool enableDebugMarkers = false;
@@ -139,6 +139,8 @@ public:
 	bool prepared = false;
 	uint32_t width = 1280;
 	uint32_t height = 720;
+
+    bool startSim = false;
 
 	VkClearColorValue defaultClearColor = { { 0.025f, 0.025f, 0.025f, 1.0f } };
 

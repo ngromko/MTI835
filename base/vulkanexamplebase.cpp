@@ -1105,6 +1105,9 @@ void VulkanExampleBase::handleMessages(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
 				textOverlay->visible = !textOverlay->visible;
 			}
 			break;
+        case VK_F2:
+            startSim = !startSim;
+            break;
 		case VK_ESCAPE:
 			PostQuitMessage(0);
 			break;

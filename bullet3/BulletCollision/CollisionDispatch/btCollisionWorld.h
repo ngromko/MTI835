@@ -259,7 +259,7 @@ public:
 			btAssert(rayResult.m_hitFraction <= m_closestHitFraction);
 			
 			m_closestHitFraction = rayResult.m_hitFraction;
-			m_collisionObject = rayResult.m_collisionObject;
+            m_collisionObject = rayResult.m_collisionObject;
 			if (normalInWorldSpace)
 			{
 				m_hitNormalWorld = rayResult.m_hitNormalLocal;
@@ -307,7 +307,7 @@ public:
 			btVector3 hitPointWorld;
 			hitPointWorld.setInterpolate3(m_rayFromWorld,m_rayToWorld,rayResult.m_hitFraction);
 			m_hitPointWorld.push_back(hitPointWorld);
-			m_hitFractions.push_back(rayResult.m_hitFraction);
+            m_hitFractions.push_back(rayResult.m_hitFraction);
 			return m_closestHitFraction;
 		}
 	};

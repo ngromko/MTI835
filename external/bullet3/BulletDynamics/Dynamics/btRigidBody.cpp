@@ -32,6 +32,12 @@ btRigidBody::btRigidBody(const btRigidBody::btRigidBodyConstructionInfo& constru
 	setupRigidBody(constructionInfo);
 }
 
+btRigidBody::btRigidBody(const btRigidBody::btRigidBodyConstructionInfo& constructionInfo, bool selectable)
+{
+    setupRigidBody(constructionInfo);
+    this->selectable=selectable;
+}
+
 btRigidBody::btRigidBody(btScalar mass, btMotionState *motionState, btCollisionShape *collisionShape, const btVector3 &localInertia)
 {
 	btRigidBodyConstructionInfo cinfo(mass,motionState,collisionShape,localInertia);
