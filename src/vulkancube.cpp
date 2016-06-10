@@ -9,12 +9,13 @@
 */
 
 #include "VulkanCube.h"
+#include "Fade_2D.h"
 
 VulkanCube::VulkanCube(VkDevice device, VulkanExampleBase *example,glm::vec3 halfSize,glm::vec3 color, glm::vec3 startPos,float mass)
 {
     this->device = device;
     this->exampleBase = example;
-    prepareVertices(halfSize,color);
+    allo = prepareVertices(halfSize,color);
     prepareRigidBody(halfSize, startPos, mass);
     prepareUniformBuffer(startPos);
 
@@ -31,7 +32,7 @@ VulkanCube::~VulkanCube()
 	vkFreeMemory(device, vertexBuffer.mem, nullptr);
 }
 
-void VulkanCube::prepareVertices(glm::vec3 halfSize,glm::vec3 color){
+std::vector<glm::vec3> VulkanCube::prepareVertices(glm::vec3 halfSize,glm::vec3 color){
 
     // Setup vertices
 
@@ -80,6 +81,13 @@ void VulkanCube::prepareVertices(glm::vec3 halfSize,glm::vec3 color){
          v = { { -halfSize.x,halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 0.0, 1.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
          v = { { halfSize.x,-halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 0.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
 
+    std::vector<glm::vec3> result;
+    for(int i=0;i<12;i++){
+        for(int j=0;j<3;j++){
+            result.push_back(glm::vec3(vBuffer.at(3*i+j).pos[0],vBuffer.at(3*i+j).pos[1],vBuffer.at(3*i+j).pos[2]));
+        }
+        result.push_back(glm::vec3(vBuffer.at(3*i).normal[0],vBuffer.at(3*i).normal[1],vBuffer.at(3*i).normal[2]));
+    }
 	int vertexBufferSize = vBuffer.size() * sizeof(Vertex);
 
 	VkMemoryAllocateInfo memAlloc = vkTools::initializers::memoryAllocateInfo();
@@ -103,6 +111,7 @@ void VulkanCube::prepareVertices(glm::vec3 halfSize,glm::vec3 color){
 	vkUnmapMemory(device, vertexBuffer.mem);
 	err = vkBindBufferMemory(device, vertexBuffer.buf, vertexBuffer.mem, 0);
 	assert(!err);
+    return result;
 }
 
 void VulkanCube::prepareRigidBody(glm::vec3 size, glm::vec3 startPos, float mass){

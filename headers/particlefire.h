@@ -18,14 +18,14 @@
 #include <glm/gtc/matrix_inverse.hpp>
 
 #include "vulkanObject.h"
-#include "vkObjectMotionState.h"
 
 #include "vulkanexamplebase.h"
 #include "btBulletDynamicsCommon.h"
-#define PARTICLE_COUNT 512
+#define PARTICLE_COUNT 100
 #define PARTICLE_SIZE 10.0f
 
 #define FLAME_RADIUS 0.1f
+#define PARTICLE_MASS 0.0000001f
 
 #define PARTICLE_TYPE_FLAME 0
 #define PARTICLE_TYPE_SMOKE 1
@@ -38,8 +38,9 @@ struct Particle {
 	float rotation;
 	uint32_t type;
 	// Attributes not used in shader
-	glm::vec4 vel;
 	float rotationSpeed;
+    btRigidBody* body;
+    int index;
 };
 
 class VulkanFire : public VulkanObject
@@ -47,7 +48,7 @@ class VulkanFire : public VulkanObject
 private:
     glm::vec3 emitterPos = glm::vec3(0.0f, 0.0f, 0.0f);
     glm::vec3 minVel = glm::vec3(-3.0f, 0.5f, -3.0f);
-    glm::vec3 maxVel = glm::vec3(3.0f, 7.0f, 3.0f);
+    glm::vec3 maxVel = glm::vec3(3.0f, 3.0f, 3.0f);
 
 	struct {
 		VkBuffer buffer;
@@ -65,7 +66,9 @@ private:
 	std::vector<Particle> particleBuffer;
 
     float rnd(float range);
-    void initParticle(Particle *particle, glm::vec3 emitterPos);
+    void initParticle(Particle *particle, int index);
+    void reset(Particle *particle);
+
     void transitionParticle(Particle *particle);
     void prepareParticles();
     // Prepare and initialize uniform buffer containing shader uniforms
@@ -73,11 +76,13 @@ private:
 
 public:
     void draw(VkCommandBuffer cmdbuffer, VkPipelineLayout pipelineLayout);
-    void updateParticles(float);
+    void updateParticle(btVector3,int);
 
     void loadTextures();
     void setupDescriptorSet(VkDescriptorPool pool, VkDescriptorSetLayout descriptorSetLayout,VkSampler,vkTools::VulkanTexture fire,vkTools::VulkanTexture smoke);
     VulkanFire(VkDevice device, VulkanExampleBase *example,glm::vec3 pos);
+
+    void addToWorld(btDiscreteDynamicsWorld*);
 
     ~VulkanFire();
 };

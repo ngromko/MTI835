@@ -10,11 +10,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <iostream>
 #include <vector>
+
+#include <Fade_2D.h>
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
-#define GLM_RIGHT_HANDED
+
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <gli/gli.hpp>
@@ -28,16 +31,17 @@
 #include "particlefire.h"
 
 #define VERTEX_BUFFER_BIND_ID 0
-#define ENABLE_VALIDATION true
+#define ENABLE_VALIDATION false
 
-
+using namespace GEOM_FADE2D;
 class VulkanExample: public VulkanExampleBase 
 {
 private:
 	vkTools::VulkanTexture textureColorMap;
     std::chrono::time_point<std::chrono::high_resolution_clock> tStart;
     btRigidBody* selectBody;
-    bool start = false;
+    float time = 0;
+
 public:
 	struct {
 		VkPipelineVertexInputStateCreateInfo inputState;
@@ -224,6 +228,7 @@ public:
        for(int i=0;i<3 ;i++){
            dynamicsWorld->addRigidBody(cubes.at(i)->getRigidBody());
        }
+       fire->addToWorld(dynamicsWorld);
     }
 
 	void draw()
@@ -260,6 +265,8 @@ public:
         cubes.push_back(new VulkanCube(device,this,glm::vec3(0.5,0.5,0.5),glm::vec3(1,0,0),glm::vec3(0,0,0),0));
 
         cubes.push_back(new VulkanCube(device,this,glm::vec3(0.5,0.5,0.5),glm::vec3(0,0,1),glm::vec3(0.5,2,0.5),1));
+
+        addBurningPoints(cubes[1]->allo);
 
 		// Binding description
 		vertices.bindingDescriptions.resize(1);
@@ -656,8 +663,6 @@ public:
         if (!prepared)
             return;
         dynamicsWorld->stepSimulation(frameTimer);
-        fire->updateParticles(frameTimer);
-
 		vkDeviceWaitIdle(device);
 		draw();
 		vkDeviceWaitIdle(device);
@@ -727,8 +732,85 @@ public:
         }
     }
 
-};
 
+    void addBurningPoints(std::vector<glm::vec3> data){
+
+        int size = data.size();
+
+
+        for(int i=0;i<size;i+=4){
+
+            testt(data,i);
+        }
+
+        }
+                void testt(std::vector<glm::vec3> data,int i){
+                    Fade_2D dt;
+                    glm::mat3 mat,matt;
+                    glm::vec3 u,v,w,a;
+                    std::vector<Point2> vPoints;
+                    std::vector<Segment2> vSegments1;
+                    std::vector<Triangle2*> vTriangles2;
+                    std::vector<ConstraintGraph2*> vCG;
+
+                    std::stringstream sstm;
+            u = glm::normalize(data.at(i+1)-data.at(i));
+            w = data.at(i+3);
+            v = glm::cross(u,w);
+
+            mat = glm::mat3();
+
+            mat[0]=u;
+            mat[1]=v;
+            mat[2]=w;
+
+            std::cout <<"u " << u.x << " " << u.y << " " <<u.z << std::endl;
+            std::cout <<"v " << v.x << " " << v.y << " " <<v.z << std::endl ;
+            std::cout <<"w " << w.x << " " << w.y << " " <<w.z << std::endl << std::endl;
+
+            matt =glm::transpose(mat);
+            for(int j=0;j<3;j++){
+                a = matt*data.at(i+j);
+                std::cout <<"point " << data.at(i+j).x << " " << data.at(i+j).y << " " <<data.at(i+j).z << std::endl;
+                std::cout <<"point " << a.x << " " << a.y << " " <<a.z << std::endl << std::endl;
+
+                vPoints.push_back(Point2(a.x,a.y));
+            }
+            dt.insert(vPoints);
+            std::cout <<"pointf " << std::endl;
+            for(int j=0;j<3;j++){
+                Point2& p0(vPoints[j]);
+                Point2& p1(vPoints[(j+1)%3]);
+                vSegments1.push_back(Segment2(p0,p1));
+            }
+
+            ConstraintGraph2* pCG1=dt.createConstraint(vSegments1,CIS_CONSTRAINED_DELAUNAY);
+
+            vCG.push_back(pCG1);
+
+            Zone2* pZone=dt.createZone(vCG,ZL_GROW,vPoints[0]);
+            dt.applyConstraintsAndZones();
+            dt.refine(pZone,27,0.01,0.1,true);
+
+            pZone->getTriangles(vTriangles2);
+
+            sstm << "allo" << i << ".ps";
+            Visualizer2 vis2(sstm.str());
+            for(std::vector<Triangle2*>::iterator it(vTriangles2.begin());it!=vTriangles2.end();++it)
+            {
+                vis2.addObject(**it,Color(1,0,0,0.01,true));
+            }
+            vis2.writeFile();
+
+            dt.deleteZone(pZone);
+            sstm.str("");
+            sstm.clear();
+
+            vPoints.clear();
+            vSegments1.clear();
+            vCG.clear();
+        }
+};
 VulkanExample *vulkanExample;
 
 #if defined(_WIN32)

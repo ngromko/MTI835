@@ -23,7 +23,7 @@ protected:
     } ubo;
 
 public:
-    void updateModel(glm::mat4 model){
+    virtual void updateModel(glm::mat4 model){
         ubo.model = model;
         updateUniformBuffer();
     }

@@ -1,4 +1,5 @@
 #include "particlefire.h"
+#include "vkParticleMotionState.h"
 
 VulkanFire::VulkanFire(VkDevice device, VulkanExampleBase *example,glm::vec3 pos)
 {
@@ -38,9 +39,29 @@ float VulkanFire::rnd(float range)
     return range * (rand() / double(RAND_MAX));
 }
 
-void VulkanFire::initParticle(Particle *particle, glm::vec3 emitterPos)
+void VulkanFire::initParticle(Particle *particle, int index)
 {
-    particle->vel = glm::vec4(0.0f, minVel.y + rnd(maxVel.y - minVel.y), 0.0f, 0.0f);
+
+    //Body creation
+    btCollisionShape* groundShape = new btSphereShape(btScalar(particle->size));
+    btVector3 localInertia(0,0,0);
+
+    btTransform groundTransform;
+    groundTransform.setIdentity();
+
+    VkParticleMotionState* myMotionState = new VkParticleMotionState(groundTransform,this,index);
+
+    groundShape->calculateLocalInertia(PARTICLE_MASS,localInertia);
+
+    btRigidBody::btRigidBodyConstructionInfo rbInfo(PARTICLE_MASS,myMotionState,groundShape,localInertia);
+    particle->body = new btRigidBody(rbInfo,false);
+
+    reset(particle);
+
+}
+
+
+void VulkanFire::reset(Particle *particle){
     particle->alpha = rnd(0.75f);
     particle->size = 0.05f + rnd(0.025f);
     particle->color = glm::vec4(1.0f);
@@ -58,6 +79,10 @@ void VulkanFire::initParticle(Particle *particle, glm::vec3 emitterPos)
     particle->pos.z = r * sin(theta) * cos(phi);
 
     particle->pos += glm::vec4(emitterPos, 0.0f);
+
+    particle->body->getWorldTransform().setOrigin(btVector3(particle->pos.x, particle->pos.y, particle->pos.z));
+
+    particle->body->setLinearVelocity(btVector3(0.0f, minVel.y + rnd(maxVel.y - minVel.y), 0.0f));
 }
 
 void VulkanFire::transitionParticle(Particle *particle)
@@ -70,21 +95,21 @@ void VulkanFire::transitionParticle(Particle *particle)
         {
             particle->alpha = 0.0f;
             particle->color = glm::vec4(0.25f + rnd(0.25f));
-            particle->pos.x *= 0.5f;
-            particle->pos.z *= 0.5f;
-            particle->vel = glm::vec4(rnd(1.0f) - rnd(1.0f), (minVel.y * 2) + rnd(maxVel.y - minVel.y), rnd(1.0f) - rnd(1.0f), 0.0f);
+
+            particle->body->getWorldTransform().setOrigin(btVector3(particle->pos.x*0.5f, particle->pos.y, particle->pos.z*0.5f));
+            particle->body->setLinearVelocity(btVector3(rnd(1.0f) - rnd(1.0f), (minVel.y * 2) + rnd(maxVel.y - minVel.y), rnd(1.0f) - rnd(1.0f)));
             particle->size = 1.0f + rnd(0.5f);
             particle->rotationSpeed = rnd(1.0f) - rnd(1.0f);
             particle->type = PARTICLE_TYPE_SMOKE;
         }
         else
         {
-            initParticle(particle, emitterPos);
+            reset(particle);
         }
         break;
     case PARTICLE_TYPE_SMOKE:
         // Respawn at end of life
-        initParticle(particle, emitterPos);
+        reset(particle);
         break;
     }
 }
@@ -92,9 +117,10 @@ void VulkanFire::transitionParticle(Particle *particle)
 void VulkanFire::prepareParticles()
 {
     particleBuffer.resize(PARTICLE_COUNT);
+    int index=0;
     for (auto& particle : particleBuffer)
     {
-        initParticle(&particle, emitterPos);
+        initParticle(&particle, index++);
         particle.alpha = 1.0f - (abs(particle.pos.y) / (FLAME_RADIUS * 2.0f));
     }
 
@@ -112,31 +138,28 @@ void VulkanFire::prepareParticles()
     assert(!err);
 }
 
-void VulkanFire::updateParticles(float frameTimer)
+void VulkanFire::updateParticle(btVector3 ori, int index)
 {
-    float particleTimer = frameTimer * 0.45f;
-    for (auto& particle : particleBuffer)
+    Particle* particle = &particleBuffer.at(index);
+    float particleTimer = 0.0003 * 0.45f;
+    switch (particle->type)
     {
-        switch (particle.type)
-        {
-        case PARTICLE_TYPE_FLAME:
-            particle.pos.y += particle.vel.y * particleTimer * 3.5f;
-            particle.alpha += particleTimer * 2.5f;
-            particle.size -= particleTimer * 0.5f;
-            break;
-        case PARTICLE_TYPE_SMOKE:
-            particle.pos += particle.vel * frameTimer * 1.0f;
-            particle.alpha += particleTimer * 1.25f;
-            particle.size += particleTimer * 0.125f;
-            particle.color -= particleTimer * 0.05f;
-            break;
-        }
-        particle.rotation += particleTimer * particle.rotationSpeed;
-        // Transition particle state
-        if (particle.alpha > 2.0f)
-        {
-            transitionParticle(&particle);
-        }
+    case PARTICLE_TYPE_FLAME:
+        particle->pos =glm::vec4(ori.x(),ori.y(),ori.z(),0.0f);
+        particle->alpha += particleTimer * 2.5f;
+        particle->size -= particleTimer * 0.5f;
+        break;
+    case PARTICLE_TYPE_SMOKE:
+        particle->alpha += particleTimer * 1.25f;
+        particle->size += particleTimer * 0.125f;
+        particle->color -= particleTimer * 0.05f;
+        break;
+    }
+    particle->rotation += particleTimer * particle->rotationSpeed;
+    // Transition particle state
+    if (particle->alpha > 2.0f)
+    {
+        transitionParticle(particle);
     }
     size_t size = particleBuffer.size() * sizeof(Particle);
     memcpy(particleVkBuffer.mappedMemory, particleBuffer.data(), size);
@@ -201,4 +224,12 @@ void VulkanFire::prepareUniformBuffers()
         &uniformData.buffer,
         &uniformData.memory,
         &uniformData.descriptor);
+}
+
+void VulkanFire::addToWorld(btDiscreteDynamicsWorld* dw){
+    for (auto& particle : particleBuffer)
+    {
+        dw->addRigidBody(particle.body);
+        particle.body->setGravity(btVector3(0.0f,0.0f,0.0f));
+    }
 }

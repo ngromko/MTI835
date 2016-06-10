@@ -40,6 +40,7 @@
             <Add directory="C:/Users/Nicholas/Documents/GitHub/MTI835/external" />
             <Add directory="C:/Users/Nicholas/Documents/GitHub/MTI835/external/assimp" />
             <Add directory="C:/Users/Nicholas/Documents/GitHub/MTI835/external/bullet3" />
+            <Add directory="C:/Users/Nicholas/Documents/GitHub/MTI835/external/fade2d" />
             <Add directory="C:/Users/Nicholas/Documents/GitHub/MTI835/external/gli" />
             <Add directory="C:/Users/Nicholas/Documents/GitHub/MTI835/external/glm" />
             <Add directory="C:/Users/Nicholas/Documents/GitHub/MTI835/headers" />
@@ -70,6 +71,7 @@
             <Add directory="C:/Users/Nicholas/Documents/GitHub/MTI835/external" />
             <Add directory="C:/Users/Nicholas/Documents/GitHub/MTI835/external/assimp" />
             <Add directory="C:/Users/Nicholas/Documents/GitHub/MTI835/external/bullet3" />
+            <Add directory="C:/Users/Nicholas/Documents/GitHub/MTI835/external/fade2d" />
             <Add directory="C:/Users/Nicholas/Documents/GitHub/MTI835/external/gli" />
             <Add directory="C:/Users/Nicholas/Documents/GitHub/MTI835/external/glm" />
             <Add directory="C:/Users/Nicholas/Documents/GitHub/MTI835/headers" />
@@ -1308,6 +1310,9 @@
          <Option target="main"/>
       </Unit>
       <Unit filename="C:/Users/Nicholas/Documents/GitHub/MTI835/headers/vkObjectMotionState.h">
+         <Option target="main"/>
+      </Unit>
+      <Unit filename="C:/Users/Nicholas/Documents/GitHub/MTI835/headers/vkParticleMotionState.h">
          <Option target="main"/>
       </Unit>
       <Unit filename="C:/Users/Nicholas/Documents/GitHub/MTI835/headers/vulkanObject.h">

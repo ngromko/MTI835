@@ -28,9 +28,9 @@
 struct Vertex
 {
 	float pos[3];
-	float normal[3];
+    float color[3];
     float uv[2];
-	float color[3];
+    float normal[3];
 };
 
 class VulkanCube : public VulkanObject
@@ -54,12 +54,12 @@ private:
 	} vertexBuffer;
 
     void prepareUniformBuffer(glm::vec3 startPos);
-    void prepareVertices(glm::vec3 halfSize,glm::vec3 color);
+    std::vector<glm::vec3> prepareVertices(glm::vec3 halfSize,glm::vec3 color);
     void prepareRigidBody(glm::vec3 size,glm::vec3 startPos,float mass);
 
     btRigidBody* rbody;
 public:
-
+    std::vector<glm::vec3> allo;
 	VkDescriptorSet descriptorSet;
 
 	void draw(VkCommandBuffer cmdbuffer, VkPipelineLayout pipelineLayout);
