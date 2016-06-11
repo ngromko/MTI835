@@ -59,14 +59,13 @@ private:
 
     btRigidBody* rbody;
 public:
-    std::vector<glm::vec3> allo;
 	VkDescriptorSet descriptorSet;
 
 	void draw(VkCommandBuffer cmdbuffer, VkPipelineLayout pipelineLayout);
 
 	void setupDescriptorSet(VkDescriptorPool pool, VkDescriptorSetLayout descriptorSetLayout);
-
     VulkanCube(VkDevice device, VulkanExampleBase *example,glm::vec3 halfSize,glm::vec3 color, glm::vec3 startPos,float mass);
+    VulkanCube(VkDevice device, VulkanExampleBase *example,glm::vec3 halfSize,glm::vec3 color, glm::vec3 startPos,float mass,std::vector<glm::vec3>&);
     ~VulkanCube();
 
     btRigidBody* getRigidBody();

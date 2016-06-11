@@ -13,8 +13,6 @@
 #include <iostream>
 #include <vector>
 
-#include <Fade_2D.h>
-
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 
@@ -33,7 +31,6 @@
 #define VERTEX_BUFFER_BIND_ID 0
 #define ENABLE_VALIDATION false
 
-using namespace GEOM_FADE2D;
 class VulkanExample: public VulkanExampleBase 
 {
 private:
@@ -48,19 +45,15 @@ public:
 		std::vector<VkVertexInputBindingDescription> bindingDescriptions;
 		std::vector<VkVertexInputAttributeDescription> attributeDescriptions;
 	} vertices;
+
     struct {
-        VkPipelineVertexInputStateCreateInfo inputState;
-        std::vector<VkVertexInputBindingDescription> bindingDescriptions;
-        std::vector<VkVertexInputAttributeDescription> attributeDescriptions;
-        struct {
-            vkTools::VulkanTexture smoke;
-            vkTools::VulkanTexture fire;
-            // We use a custom sampler to change some sampler
-            // attributes required for rotation the uv coordinates
-            // inside the shader for alpha blended textures
-            VkSampler sampler;
-        } textures;
-    } particles;
+        vkTools::VulkanTexture smoke;
+        vkTools::VulkanTexture fire;
+        // We use a custom sampler to change some sampler
+        // attributes required for rotation the uv coordinates
+        // inside the shader for alpha blended textures
+        VkSampler sampler;
+    } textures;
 
     btDiscreteDynamicsWorld* dynamicsWorld;
 
@@ -96,32 +89,32 @@ public:
 
         vkDestroyPipeline(device, pipelines.fire, nullptr);
 
-        vkDestroySampler(device, particles.textures.sampler, nullptr);
+        vkDestroySampler(device, textures.sampler, nullptr);
 		
 		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
         vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 
 		textureLoader->destroyTexture(textureColorMap);
-        textureLoader->destroyTexture(particles.textures.smoke);
-        textureLoader->destroyTexture(particles.textures.fire);
+        textureLoader->destroyTexture(textures.smoke);
+        textureLoader->destroyTexture(textures.fire);
 	}
 
-	void loadTextures()
-	{
+    void loadTextures()
+    {
         textureLoader->loadTexture(
-			getAssetPath() + "textures/crate_bc3.ktx", 
-			VK_FORMAT_BC3_UNORM_BLOCK, 
-			&textureColorMap);
+            getAssetPath() + "textures/crate_bc3.ktx",
+            VK_FORMAT_BC3_UNORM_BLOCK,
+            &textureColorMap);
 
         // Particles
         textureLoader->loadTexture(
             getAssetPath() + "textures/particle_smoke.ktx",
             VK_FORMAT_BC3_UNORM_BLOCK,
-            &particles.textures.smoke);
+            &textures.smoke);
         textureLoader->loadTexture(
             getAssetPath() + "textures/particle_fire.ktx",
             VK_FORMAT_BC3_UNORM_BLOCK,
-            &particles.textures.fire);
+            &textures.fire);
 
         // Create a custom sampler to be used with the particle textures
         // Create sampler
@@ -137,15 +130,15 @@ public:
         samplerCreateInfo.compareOp = VK_COMPARE_OP_NEVER;
         samplerCreateInfo.minLod = 0.0f;
         // Both particle textures have the same number of mip maps
-        samplerCreateInfo.maxLod = particles.textures.fire.mipLevels;
+        samplerCreateInfo.maxLod = textures.fire.mipLevels;
         // Enable anisotropic filtering
         samplerCreateInfo.maxAnisotropy = 8;
         samplerCreateInfo.anisotropyEnable = VK_TRUE;
         // Use a different border color (than the normal texture loader) for additive blending
         samplerCreateInfo.borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
-        VkResult err = vkCreateSampler(device, &samplerCreateInfo, nullptr, &particles.textures.sampler);
+        VkResult err = vkCreateSampler(device, &samplerCreateInfo, nullptr, &textures.sampler);
         assert(!err);
-	}
+    }
 
     void buildCommandBuffers()
     {
@@ -199,7 +192,7 @@ public:
 
             vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.fire);
 
-            fire->draw(drawCmdBuffers[i], pipelineLayout);
+            fire->draw(drawCmdBuffers[i]);
 
             vkCmdEndRenderPass(drawCmdBuffers[i]);
 
@@ -260,13 +253,12 @@ public:
 
 	void prepareVertices()
 	{
+        std::vector<glm::vec3> allo;
         cubes.push_back(new VulkanCube(device,this,glm::vec3(10.0,0.1,10.0),glm::vec3(0.1,0.1,0.1),glm::vec3(0,-0.6,0),0));
 
-        cubes.push_back(new VulkanCube(device,this,glm::vec3(0.5,0.5,0.5),glm::vec3(1,0,0),glm::vec3(0,0,0),0));
+        cubes.push_back(new VulkanCube(device,this,glm::vec3(0.5,0.5,0.5),glm::vec3(1,0,0),glm::vec3(0,0,0),0,allo));
 
         cubes.push_back(new VulkanCube(device,this,glm::vec3(0.5,0.5,0.5),glm::vec3(0,0,1),glm::vec3(0.5,2,0.5),1));
-
-        addBurningPoints(cubes[1]->allo);
 
 		// Binding description
 		vertices.bindingDescriptions.resize(1);
@@ -315,77 +307,13 @@ public:
 		vertices.inputState.pVertexAttributeDescriptions = vertices.attributeDescriptions.data();
 	}
 
-    void prepareParticles()
-    {
-
-        fire = new VulkanFire(device,this,glm::vec3(2,0,0));
-
-        // Binding description
-        particles.bindingDescriptions.resize(1);
-        particles.bindingDescriptions[0] =
-            vkTools::initializers::vertexInputBindingDescription(
-                VERTEX_BUFFER_BIND_ID,
-                sizeof(Particle),
-                VK_VERTEX_INPUT_RATE_VERTEX);
-
-        // Attribute descriptions
-        // Describes memory layout and shader positions
-        // Location 0 : Position
-        particles.attributeDescriptions.push_back(
-            vkTools::initializers::vertexInputAttributeDescription(
-                VERTEX_BUFFER_BIND_ID,
-                0,
-                VK_FORMAT_R32G32B32A32_SFLOAT,
-                0));
-        // Location 1 : Color
-        particles.attributeDescriptions.push_back(
-            vkTools::initializers::vertexInputAttributeDescription(
-                VERTEX_BUFFER_BIND_ID,
-                1,
-                VK_FORMAT_R32G32B32A32_SFLOAT,
-                sizeof(float) * 4));
-        // Location 2 : Alpha
-        particles.attributeDescriptions.push_back(
-            vkTools::initializers::vertexInputAttributeDescription(
-                VERTEX_BUFFER_BIND_ID,
-                2,
-                VK_FORMAT_R32_SFLOAT,
-                sizeof(float) * 8));
-        // Location 3 : Size
-        particles.attributeDescriptions.push_back(
-            vkTools::initializers::vertexInputAttributeDescription(
-                VERTEX_BUFFER_BIND_ID,
-                3,
-                VK_FORMAT_R32_SFLOAT,
-                sizeof(float) * 9));
-        // Location 4 : Rotation
-        particles.attributeDescriptions.push_back(
-            vkTools::initializers::vertexInputAttributeDescription(
-                VERTEX_BUFFER_BIND_ID,
-                4,
-                VK_FORMAT_R32_SFLOAT,
-                sizeof(float) * 10));
-        // Location 5 : Type
-        particles.attributeDescriptions.push_back(
-            vkTools::initializers::vertexInputAttributeDescription(
-                VERTEX_BUFFER_BIND_ID,
-                5,
-                VK_FORMAT_R32_SINT,
-                sizeof(float) * 11));
-
-        particles.inputState = vkTools::initializers::pipelineVertexInputStateCreateInfo();
-        particles.inputState.vertexBindingDescriptionCount = particles.bindingDescriptions.size();
-        particles.inputState.pVertexBindingDescriptions = particles.bindingDescriptions.data();
-        particles.inputState.vertexAttributeDescriptionCount = particles.attributeDescriptions.size();
-        particles.inputState.pVertexAttributeDescriptions = particles.attributeDescriptions.data();
-    }
-
 	void setupDescriptorPool()
 	{
 		// Example uses one ubo and one combined image sampler 
 		std::vector<VkDescriptorPoolSize> poolSizes =
 		{
             vkTools::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, cubes.size()+1),
+            vkTools::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 4),
             vkTools::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 10),
 		};
 
@@ -443,7 +371,6 @@ public:
         {
             cube->setupDescriptorSet(descriptorPool, descriptorSetLayout);
         }
-        fire->setupDescriptorSet(descriptorPool, descriptorSetLayout,particles.textures.sampler,particles.textures.fire,particles.textures.smoke);
     }
 
     void preparePipelinesCubes()
@@ -524,93 +451,7 @@ public:
         assert(!err);
 	}
 
-    void preparePipelinesFire()
-    {
-        VkPipelineInputAssemblyStateCreateInfo inputAssemblyState =
-            vkTools::initializers::pipelineInputAssemblyStateCreateInfo(
-                VK_PRIMITIVE_TOPOLOGY_POINT_LIST,
-                0,
-                VK_FALSE);
 
-        VkPipelineRasterizationStateCreateInfo rasterizationState =
-            vkTools::initializers::pipelineRasterizationStateCreateInfo(
-                VK_POLYGON_MODE_FILL,
-                VK_CULL_MODE_BACK_BIT,
-                VK_FRONT_FACE_CLOCKWISE,
-                0);
-
-        VkPipelineColorBlendAttachmentState blendAttachmentState =
-            vkTools::initializers::pipelineColorBlendAttachmentState(
-                0xf,
-                VK_FALSE);
-
-        VkPipelineColorBlendStateCreateInfo colorBlendState =
-            vkTools::initializers::pipelineColorBlendStateCreateInfo(
-                1,
-                &blendAttachmentState);
-
-        VkPipelineDepthStencilStateCreateInfo depthStencilState =
-            vkTools::initializers::pipelineDepthStencilStateCreateInfo(
-                VK_TRUE,
-                VK_TRUE,
-                VK_COMPARE_OP_LESS_OR_EQUAL);
-
-        VkPipelineViewportStateCreateInfo viewportState =
-            vkTools::initializers::pipelineViewportStateCreateInfo(1, 1, 0);
-
-        VkPipelineMultisampleStateCreateInfo multisampleState =
-            vkTools::initializers::pipelineMultisampleStateCreateInfo(
-                VK_SAMPLE_COUNT_1_BIT,
-                0);
-
-        std::vector<VkDynamicState> dynamicStateEnables = {
-            VK_DYNAMIC_STATE_VIEWPORT,
-            VK_DYNAMIC_STATE_SCISSOR
-        };
-        VkPipelineDynamicStateCreateInfo dynamicState =
-            vkTools::initializers::pipelineDynamicStateCreateInfo(
-                dynamicStateEnables.data(),
-                dynamicStateEnables.size(),
-                0);
-
-        // Load shaders
-        std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages;
-
-        shaderStages[0] = loadShader(getAssetPath() + "shaders/particlefire/particle.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
-        shaderStages[1] = loadShader(getAssetPath() + "shaders/particlefire/particle.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
-
-        VkGraphicsPipelineCreateInfo pipelineCreateInfo =
-            vkTools::initializers::pipelineCreateInfo(
-                pipelineLayout,
-                renderPass,
-                0);
-
-        pipelineCreateInfo.pVertexInputState = &particles.inputState;
-        pipelineCreateInfo.pInputAssemblyState = &inputAssemblyState;
-        pipelineCreateInfo.pRasterizationState = &rasterizationState;
-        pipelineCreateInfo.pColorBlendState = &colorBlendState;
-        pipelineCreateInfo.pMultisampleState = &multisampleState;
-        pipelineCreateInfo.pViewportState = &viewportState;
-        pipelineCreateInfo.pDepthStencilState = &depthStencilState;
-        pipelineCreateInfo.pDynamicState = &dynamicState;
-        pipelineCreateInfo.stageCount = shaderStages.size();
-        pipelineCreateInfo.pStages = shaderStages.data();
-
-        depthStencilState.depthWriteEnable = VK_FALSE;
-
-        // Premulitplied alpha
-        blendAttachmentState.blendEnable = VK_TRUE;
-        blendAttachmentState.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
-        blendAttachmentState.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-        blendAttachmentState.colorBlendOp = VK_BLEND_OP_ADD;
-        blendAttachmentState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-        blendAttachmentState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-        blendAttachmentState.alphaBlendOp = VK_BLEND_OP_ADD;
-        blendAttachmentState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-
-        VkResult err = vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipelines.fire);
-        assert(!err);
-    }
 
 	void updateUniformBuffers()
 	{
@@ -629,18 +470,13 @@ public:
         fire->updateProjView(proj,view);
 	}
 
-
-
-
 	void prepare()
 	{
 		VulkanExampleBase::prepare();
 		loadTextures();
 		prepareVertices();
-        prepareParticles();
 		setupDescriptorSetLayout();
         preparePipelinesCubes();
-        preparePipelinesFire();
 		setupDescriptorPool();
         setupDescriptorSets();
 		buildCommandBuffers();
@@ -731,85 +567,6 @@ public:
             //trans.setOrigin(btVector3(0,0,0));
         }
     }
-
-
-    void addBurningPoints(std::vector<glm::vec3> data){
-
-        int size = data.size();
-
-
-        for(int i=0;i<size;i+=4){
-
-            testt(data,i);
-        }
-
-        }
-                void testt(std::vector<glm::vec3> data,int i){
-                    Fade_2D dt;
-                    glm::mat3 mat,matt;
-                    glm::vec3 u,v,w,a;
-                    std::vector<Point2> vPoints;
-                    std::vector<Segment2> vSegments1;
-                    std::vector<Triangle2*> vTriangles2;
-                    std::vector<ConstraintGraph2*> vCG;
-
-                    std::stringstream sstm;
-            u = glm::normalize(data.at(i+1)-data.at(i));
-            w = data.at(i+3);
-            v = glm::cross(u,w);
-
-            mat = glm::mat3();
-
-            mat[0]=u;
-            mat[1]=v;
-            mat[2]=w;
-
-            std::cout <<"u " << u.x << " " << u.y << " " <<u.z << std::endl;
-            std::cout <<"v " << v.x << " " << v.y << " " <<v.z << std::endl ;
-            std::cout <<"w " << w.x << " " << w.y << " " <<w.z << std::endl << std::endl;
-
-            matt =glm::transpose(mat);
-            for(int j=0;j<3;j++){
-                a = matt*data.at(i+j);
-                std::cout <<"point " << data.at(i+j).x << " " << data.at(i+j).y << " " <<data.at(i+j).z << std::endl;
-                std::cout <<"point " << a.x << " " << a.y << " " <<a.z << std::endl << std::endl;
-
-                vPoints.push_back(Point2(a.x,a.y));
-            }
-            dt.insert(vPoints);
-            std::cout <<"pointf " << std::endl;
-            for(int j=0;j<3;j++){
-                Point2& p0(vPoints[j]);
-                Point2& p1(vPoints[(j+1)%3]);
-                vSegments1.push_back(Segment2(p0,p1));
-            }
-
-            ConstraintGraph2* pCG1=dt.createConstraint(vSegments1,CIS_CONSTRAINED_DELAUNAY);
-
-            vCG.push_back(pCG1);
-
-            Zone2* pZone=dt.createZone(vCG,ZL_GROW,vPoints[0]);
-            dt.applyConstraintsAndZones();
-            dt.refine(pZone,27,0.01,0.1,true);
-
-            pZone->getTriangles(vTriangles2);
-
-            sstm << "allo" << i << ".ps";
-            Visualizer2 vis2(sstm.str());
-            for(std::vector<Triangle2*>::iterator it(vTriangles2.begin());it!=vTriangles2.end();++it)
-            {
-                vis2.addObject(**it,Color(1,0,0,0.01,true));
-            }
-            vis2.writeFile();
-
-            dt.deleteZone(pZone);
-            sstm.str("");
-            sstm.clear();
-
-            vPoints.clear();
-            vSegments1.clear();
-            vCG.clear();
-        }
 };
 VulkanExample *vulkanExample;
 

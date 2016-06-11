@@ -1,14 +1,9 @@
 #include "particlefire.h"
-#include "vkParticleMotionState.h"
 
-VulkanFire::VulkanFire(VkDevice device, VulkanExampleBase *example,glm::vec3 pos)
+VulkanFire::VulkanFire(VkDevice device, VulkanExampleBase *example,VkQueue queue,VkRenderPass renderpass,VkDescriptorPool pool)
 {
     this->device = device;
     this->exampleBase=example;
-    emitterPos = pos;
-    prepareParticles();
-    prepareUniformBuffers();
-
 }
 
 VulkanFire::~VulkanFire()
@@ -16,22 +11,117 @@ VulkanFire::~VulkanFire()
     // Clean up used Vulkan resources
     // Note : Inherited destructor cleans up resources stored in base class
 
-    vkUnmapMemory(device, particleVkBuffer.memory);
-    vkDestroyBuffer(device, particleVkBuffer.buffer, nullptr);
-    vkFreeMemory(device, particleVkBuffer.memory, nullptr);
+    vkUnmapMemory(device, computeUniformBuffer.memory);
+    vkDestroyBuffer(device, computeUniformBuffer.buffer, nullptr);
+    vkFreeMemory(device, computeUniformBuffer.memory, nullptr);
 
-    vkDestroyBuffer(device, uniformData.buffer, nullptr);
-    vkFreeMemory(device, uniformData.memory, nullptr);
+    vkDestroyPipeline(device,drawParticles,nullptr);
+    vkDestroyPipeline(device,clickFire,nullptr);
+    vkDestroyPipeline(device,updateParticles,nullptr);
+    vkDestroyPipeline(device,propageFire,nullptr);
 }
 
-void VulkanFire::draw(VkCommandBuffer cmdbuffer, VkPipelineLayout pipelineLayout)
+void VulkanFire::draw(VkCommandBuffer cmdbuffer)
 {
     // Particle system
     vkCmdBindDescriptorSets(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, NULL);
 
     VkDeviceSize offsets[1] = { 0 };
-    vkCmdBindVertexBuffers(cmdbuffer, 0, 1, &particleVkBuffer.buffer, offsets);
+    vkCmdBindVertexBuffers(cmdbuffer, 0, 1, &particlesStorageBuffer.buffer, offsets);
     vkCmdDraw(cmdbuffer, PARTICLE_COUNT, 1, 0, 0);
+}
+
+void VulkanFire::addBurningPoints(std::vector<glm::vec3> data){
+
+    int size = data.size();
+    std::vector<glm::vec3> allPoints;
+    BurningPoint bp;
+    for(int i=0;i<size;i+=4){
+
+        triangulate(data,i,allPoints);
+    }
+
+    for(int i=0;i<allPoints.size();i++){
+        bp.pos[0] = allPoints[i].x;
+        bp.pos[1] = allPoints[i].y;
+        bp.pos[2] = allPoints[i].z;
+        bp.nCount = 0;
+        bp.state = 0;
+        for(int j=0;j<allPoints.size();j++){
+            if(i!=j){
+                glm::vec3 diff = allPoints[j] - allPoints[i];
+                float d = glm::dot(diff,diff);
+                if(d<0.11){
+                    bp.neighboors[bp.nCount]=j;
+                    bp.nCount++;
+                }
+                if(bp.nCount==6){
+                    break;
+                }
+            }
+        }
+        burningPoints.push_back(bp);
+    }
+
+}
+void VulkanFire::triangulate(std::vector<glm::vec3> data,int i,std::vector<glm::vec3>& allPoints){
+    Fade_2D dt;
+    glm::mat3 mat,matt;
+    glm::vec3 u,v,w,a;
+    float z;
+    std::vector<Point2> vPoints;
+    std::vector<Point2*> vPPoints;
+    std::vector<Segment2> vSegments1;
+    std::vector<Triangle2*> vTriangles2;
+    std::vector<ConstraintGraph2*> vCG;
+
+    std::stringstream sstm;
+    u = glm::normalize(data.at(i+1)-data.at(i));
+    w = data.at(i+3);
+    v = glm::cross(u,w);
+
+    mat = glm::mat3();
+
+    mat[0]=u;
+    mat[1]=v;
+    mat[2]=w;
+
+    matt =glm::transpose(mat);
+    for(int j=0;j<3;j++){
+        a = matt*data.at(i+j);
+        vPoints.push_back(Point2(a.x,a.y));
+    }
+    z=a.z;
+    dt.insert(vPoints);
+    for(int j=0;j<3;j++){
+        Point2& p0(vPoints[j]);
+        Point2& p1(vPoints[(j+1)%3]);
+        vSegments1.push_back(Segment2(p0,p1));
+    }
+
+    ConstraintGraph2* pCG1=dt.createConstraint(vSegments1,CIS_CONSTRAINED_DELAUNAY);
+
+    vCG.push_back(pCG1);
+
+    Zone2* pZone=dt.createZone(vCG,ZL_GROW,vPoints[0]);
+    dt.applyConstraintsAndZones();
+    dt.refine(pZone,27,0.01,0.1,true);
+
+    pZone->getTriangles(vTriangles2);
+
+    vPoints.clear();
+
+    dt.getVertexPointers(vPPoints);
+
+    for(int i=0;i<vPPoints.size();i++){
+        u = mat*glm::vec3(vPPoints[i]->x(),vPPoints[i]->y(),z);
+        allPoints.push_back(u);
+    }
+
+    dt.deleteZone(pZone);
+
+    vSegments1.clear();
+    vCG.clear();
 }
 
 float VulkanFire::rnd(float range)
@@ -43,7 +133,7 @@ void VulkanFire::initParticle(Particle *particle, int index)
 {
 
     //Body creation
-    btCollisionShape* groundShape = new btSphereShape(btScalar(particle->size));
+    /*btCollisionShape* groundShape = new btSphereShape(btScalar(particle->size));
     btVector3 localInertia(0,0,0);
 
     btTransform groundTransform;
@@ -56,13 +146,13 @@ void VulkanFire::initParticle(Particle *particle, int index)
     btRigidBody::btRigidBodyConstructionInfo rbInfo(PARTICLE_MASS,myMotionState,groundShape,localInertia);
     particle->body = new btRigidBody(rbInfo,false);
 
-    reset(particle);
+    reset(particle);*/
 
 }
 
 
 void VulkanFire::reset(Particle *particle){
-    particle->alpha = rnd(0.75f);
+    /*particle->alpha = rnd(0.75f);
     particle->size = 0.05f + rnd(0.025f);
     particle->color = glm::vec4(1.0f);
     particle->type = PARTICLE_TYPE_FLAME;
@@ -82,12 +172,12 @@ void VulkanFire::reset(Particle *particle){
 
     particle->body->getWorldTransform().setOrigin(btVector3(particle->pos.x, particle->pos.y, particle->pos.z));
 
-    particle->body->setLinearVelocity(btVector3(0.0f, minVel.y + rnd(maxVel.y - minVel.y), 0.0f));
+    particle->body->setLinearVelocity(btVector3(0.0f, minVel.y + rnd(maxVel.y - minVel.y), 0.0f));*/
 }
 
 void VulkanFire::transitionParticle(Particle *particle)
 {
-    switch (particle->type)
+    /*switch (particle->type)
     {
     case PARTICLE_TYPE_FLAME:
         // Flame particles have a chance of turning into smoke
@@ -111,34 +201,472 @@ void VulkanFire::transitionParticle(Particle *particle)
         // Respawn at end of life
         reset(particle);
         break;
-    }
+    }*/
 }
 
-void VulkanFire::prepareParticles()
+void VulkanFire::prepareParticles(VkQueue queue)
 {
-    particleBuffer.resize(PARTICLE_COUNT);
-    int index=0;
+    std::vector<Particle> particleBuffer;
+    particleBuffer.resize(burningPoints.size()*6);
+    computeUbo.particleCount = burningPoints.size()*6;
+    computeUbo.bPointsCount = burningPoints.size();
     for (auto& particle : particleBuffer)
     {
-        initParticle(&particle, index++);
-        particle.alpha = 1.0f - (abs(particle.pos.y) / (FLAME_RADIUS * 2.0f));
+        particle.pos[2]=5;
     }
 
-    particleVkBuffer.size = particleBuffer.size() * sizeof(Particle);
+
+    // Setup and fill the compute shader storage buffers for
+    // vertex positions and velocities
+
+    uint32_t storageBufferSize = particleBuffer.size() * sizeof(Particle);
+
+    // Staging
+    // SSBO is static, copy to device local memory
+    // This results in better performance
+
+    struct {
+        VkDeviceMemory memory;
+        VkBuffer buffer;
+    } stagingBuffer;
 
     exampleBase->createBuffer(
-        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        particleVkBuffer.size,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+        storageBufferSize,
         particleBuffer.data(),
-        &particleVkBuffer.buffer,
-        &particleVkBuffer.memory);
+        &stagingBuffer.buffer,
+        &stagingBuffer.memory);
 
-    // Map the memory and store the pointer for reuse
-    VkResult err = vkMapMemory(device, particleVkBuffer.memory, 0, particleVkBuffer.size, 0, &particleVkBuffer.mappedMemory);
+    exampleBase->createBuffer(
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        storageBufferSize,
+        nullptr,
+        &particlesStorageBuffer.buffer,
+        &particlesStorageBuffer.memory);
+
+    // Copy to staging buffer
+    VkCommandBuffer copyCmd = exampleBase->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+
+    VkBufferCopy copyRegion = {};
+    copyRegion.size = storageBufferSize;
+    vkCmdCopyBuffer(
+        copyCmd,
+        stagingBuffer.buffer,
+        particlesStorageBuffer.buffer,
+        1,
+        &copyRegion);
+
+    exampleBase->flushCommandBuffer(copyCmd, queue, true);
+
+    vkFreeMemory(device, stagingBuffer.memory, nullptr);
+    vkDestroyBuffer(device, stagingBuffer.buffer, nullptr);
+
+    particlesStorageBuffer.descriptor.range = storageBufferSize;
+    particlesStorageBuffer.descriptor.buffer = particlesStorageBuffer.buffer;
+    particlesStorageBuffer.descriptor.offset = 0;
+
+    // Binding description
+    attributesParticles.bindingDescriptions.resize(1);
+    attributesParticles.bindingDescriptions[0] =
+        vkTools::initializers::vertexInputBindingDescription(
+            VERTEX_BUFFER_BIND_ID,
+            sizeof(Particle),
+            VK_VERTEX_INPUT_RATE_VERTEX);
+
+    // Attribute descriptions
+    // Describes memory layout and shader positions
+    // Location 0 : Position
+    attributesParticles.attributeDescriptions.push_back(
+        vkTools::initializers::vertexInputAttributeDescription(
+            VERTEX_BUFFER_BIND_ID,
+            0,
+            VK_FORMAT_R32G32B32A32_SFLOAT,
+            0));
+    // Location 1 : Color
+    attributesParticles.attributeDescriptions.push_back(
+        vkTools::initializers::vertexInputAttributeDescription(
+            VERTEX_BUFFER_BIND_ID,
+            1,
+            VK_FORMAT_R32G32B32A32_SFLOAT,
+            sizeof(float) * 4));
+    // Location 2 : Alpha
+    attributesParticles.attributeDescriptions.push_back(
+        vkTools::initializers::vertexInputAttributeDescription(
+            VERTEX_BUFFER_BIND_ID,
+            2,
+            VK_FORMAT_R32_SFLOAT,
+            sizeof(float) * 8));
+    // Location 3 : Size
+    attributesParticles.attributeDescriptions.push_back(
+        vkTools::initializers::vertexInputAttributeDescription(
+            VERTEX_BUFFER_BIND_ID,
+            3,
+            VK_FORMAT_R32_SFLOAT,
+            sizeof(float) * 9));
+    // Location 4 : Rotation
+    attributesParticles.attributeDescriptions.push_back(
+        vkTools::initializers::vertexInputAttributeDescription(
+            VERTEX_BUFFER_BIND_ID,
+            4,
+            VK_FORMAT_R32_SFLOAT,
+            sizeof(float) * 10));
+    // Location 5 : Type
+    attributesParticles.attributeDescriptions.push_back(
+        vkTools::initializers::vertexInputAttributeDescription(
+            VERTEX_BUFFER_BIND_ID,
+            5,
+            VK_FORMAT_R32_SINT,
+            sizeof(float) * 11));
+
+    // Assign to vertex buffer
+    attributesParticles.inputState = vkTools::initializers::pipelineVertexInputStateCreateInfo();
+    attributesParticles.inputState.vertexBindingDescriptionCount = attributesParticles.bindingDescriptions.size();
+    attributesParticles.inputState.pVertexBindingDescriptions = attributesParticles.bindingDescriptions.data();
+    attributesParticles.inputState.vertexAttributeDescriptionCount = attributesParticles.attributeDescriptions.size();
+    attributesParticles.inputState.pVertexAttributeDescriptions = attributesParticles.attributeDescriptions.data();
+}
+
+void VulkanFire::prepareBurningPoints(VkQueue queue){
+    // Setup and fill the compute shader storage buffers for
+    // vertex positions and velocities
+
+    uint32_t storageBufferSize = burningPoints.size() * sizeof(BurningPoint);
+
+    // Staging
+    // SSBO is static, copy to device local memory
+    // This results in better performance
+
+    struct {
+        VkDeviceMemory memory;
+        VkBuffer buffer;
+    } stagingBuffer;
+
+    exampleBase->createBuffer(
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+        storageBufferSize,
+        burningPoints.data(),
+        &stagingBuffer.buffer,
+        &stagingBuffer.memory);
+
+    exampleBase->createBuffer(
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        storageBufferSize,
+        nullptr,
+        &bPointsStorageBuffer.buffer,
+        &bPointsStorageBuffer.memory);
+
+    // Copy to staging buffer
+    VkCommandBuffer copyCmd = exampleBase->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+
+    VkBufferCopy copyRegion = {};
+    copyRegion.size = storageBufferSize;
+    vkCmdCopyBuffer(
+        copyCmd,
+        stagingBuffer.buffer,
+        bPointsStorageBuffer.buffer,
+        1,
+        &copyRegion);
+
+    exampleBase->flushCommandBuffer(copyCmd, queue, true);
+
+    vkFreeMemory(device, stagingBuffer.memory, nullptr);
+    vkDestroyBuffer(device, stagingBuffer.buffer, nullptr);
+
+    bPointsStorageBuffer.descriptor.range = storageBufferSize;
+    bPointsStorageBuffer.descriptor.buffer = bPointsStorageBuffer.buffer;
+    bPointsStorageBuffer.descriptor.offset = 0;
+
+    /*
+    // Binding description
+    attributesBPoints.bindingDescriptions.resize(1);
+    attributesBPoints.bindingDescriptions[0] =
+        vkTools::initializers::vertexInputBindingDescription(
+            VERTEX_BUFFER_BIND_ID,
+            sizeof(BurningPoint),
+            VK_VERTEX_INPUT_RATE_VERTEX);
+
+    // Attribute descriptions
+    // Describes memory layout and shader positions
+    // Location 0 : Position
+    attributesBPoints.attributeDescriptions.push_back(
+        vkTools::initializers::vertexInputAttributeDescription(
+            VERTEX_BUFFER_BIND_ID,
+            0,
+            VK_FORMAT_R32G32B32_SFLOAT,
+            0));
+    // Location 1 : Voisins 1à3
+    attributesBPoints.attributeDescriptions.push_back(
+        vkTools::initializers::vertexInputAttributeDescription(
+            VERTEX_BUFFER_BIND_ID,
+            1,
+            VK_FORMAT_R32G32B32_UINT,
+            sizeof(float) * 3));
+    // Location 2 : Voisins 4 à 6
+    attributesBPoints.attributeDescriptions.push_back(
+        vkTools::initializers::vertexInputAttributeDescription(
+            VERTEX_BUFFER_BIND_ID,
+            2,
+            VK_FORMAT_R32G32B32_UINT,
+            sizeof(unsigned int) * 3+sizeof(float) * 3));
+    // Location 3 : nCount
+    attributesBPoints.attributeDescriptions.push_back(
+        vkTools::initializers::vertexInputAttributeDescription(
+            VERTEX_BUFFER_BIND_ID,
+            3,
+            VK_FORMAT_R32_UINT,
+            sizeof(unsigned int) * 6+sizeof(float) * 3));
+    // Location 4 : state
+    attributesBPoints.attributeDescriptions.push_back(
+        vkTools::initializers::vertexInputAttributeDescription(
+            VERTEX_BUFFER_BIND_ID,
+            4,
+            VK_FORMAT_R16_UINT,
+            sizeof(unsigned int) * 7+sizeof(float) * 3));
+
+    // Assign to vertex buffer
+    attributesBPoints.inputState = vkTools::initializers::pipelineVertexInputStateCreateInfo();
+    attributesBPoints.inputState.vertexBindingDescriptionCount = attributesBPoints.bindingDescriptions.size();
+    attributesBPoints.inputState.pVertexBindingDescriptions = attributesBPoints.bindingDescriptions.data();
+    attributesBPoints.inputState.vertexAttributeDescriptionCount = attributesBPoints.attributeDescriptions.size();
+    attributesBPoints.inputState.pVertexAttributeDescriptions = attributesBPoints.attributeDescriptions.data();
+    */
+}
+
+void VulkanFire::prepareComputeLayout(VkDescriptorPool descriptorPool)
+{
+    // Create compute pipeline
+    // Compute pipelines are created separate from graphics pipelines
+    // even if they use the same queue
+
+    std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
+        // Binding 0 : Particle position storage buffer
+        vkTools::initializers::descriptorSetLayoutBinding(
+            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            VK_SHADER_STAGE_COMPUTE_BIT,
+            0),
+        vkTools::initializers::descriptorSetLayoutBinding(
+            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            VK_SHADER_STAGE_COMPUTE_BIT,
+            1),
+        // Binding 1 : Uniform buffer
+        vkTools::initializers::descriptorSetLayoutBinding(
+            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            VK_SHADER_STAGE_COMPUTE_BIT,
+            2),
+    };
+
+    VkDescriptorSetLayoutCreateInfo descriptorLayout =
+        vkTools::initializers::descriptorSetLayoutCreateInfo(
+            setLayoutBindings.data(),
+            setLayoutBindings.size());
+
+    VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device,	&descriptorLayout, nullptr,	&computeDescriptorSetLayout));
+
+
+    VkPipelineLayoutCreateInfo pPipelineLayoutCreateInfo =
+        vkTools::initializers::pipelineLayoutCreateInfo(
+            &computeDescriptorSetLayout,
+            1);
+
+    VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pPipelineLayoutCreateInfo, nullptr,	&computePipelineLayout));
+
+    VkDescriptorSetAllocateInfo allocInfo =
+        vkTools::initializers::descriptorSetAllocateInfo(
+            descriptorPool,
+            &computeDescriptorSetLayout,
+            1);
+
+    VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &allocInfo, &computeDescriptorSet));
+
+    std::vector<VkWriteDescriptorSet> computeWriteDescriptorSets =
+    {
+        // Binding 0 : Particle position storage buffer
+        vkTools::initializers::writeDescriptorSet(
+            computeDescriptorSet,
+            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            0,
+            &particlesStorageBuffer.descriptor),
+        // Binding 0 : burning points storage buffer
+        vkTools::initializers::writeDescriptorSet(
+            computeDescriptorSet,
+            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            1,
+            &bPointsStorageBuffer.descriptor),
+        // Binding 1 : Uniform buffer
+        vkTools::initializers::writeDescriptorSet(
+            computeDescriptorSet,
+            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            1,
+            &computeUniformBuffer.descriptor)
+    };
+
+    vkUpdateDescriptorSets(device, computeWriteDescriptorSets.size(), computeWriteDescriptorSets.data(), 0, NULL);
+}
+
+void VulkanFire::prepareComputePipelines(std::string assetPath){
+
+    VkPipelineCache pipelineCache;
+
+    VkPipelineCacheCreateInfo pipelineCacheCreateInfo = {};
+    pipelineCacheCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+    VK_CHECK_RESULT(vkCreatePipelineCache(device, &pipelineCacheCreateInfo, nullptr, &pipelineCache));
+
+
+    VkComputePipelineCreateInfo computePipelineCreateInfo =
+        vkTools::initializers::computePipelineCreateInfo(
+            computePipelineLayout,
+            0);
+
+    // Create upadate particle pipeline
+    computePipelineCreateInfo.stage = exampleBase->loadShader(assetPath + "shaders/particlefire/updateParticle.comp.spv", VK_SHADER_STAGE_COMPUTE_BIT);
+    VK_CHECK_RESULT(vkCreateComputePipelines(device, pipelineCache, 1, &computePipelineCreateInfo, nullptr, &updateParticles));
+
+    computePipelineCreateInfo.stage = exampleBase->loadShader(assetPath + "shaders/particlefire/propageFire.comp.spv", VK_SHADER_STAGE_COMPUTE_BIT);
+    VK_CHECK_RESULT(vkCreateComputePipelines(device, pipelineCache, 1, &computePipelineCreateInfo, nullptr, &propageFire));
+
+    computePipelineCreateInfo.stage = exampleBase->loadShader(assetPath + "shaders/particlefire/clickFire.comp.spv", VK_SHADER_STAGE_COMPUTE_BIT);
+    VK_CHECK_RESULT(vkCreateComputePipelines(device, pipelineCache, 1, &computePipelineCreateInfo, nullptr, &clickFire));
+}
+
+void VulkanFire::prepareRenderLayout(VkDescriptorPool descriptorPool){
+    std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings =
+    {
+        // Binding 0 : Vertex shader uniform buffer
+        vkTools::initializers::descriptorSetLayoutBinding(
+        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            VK_SHADER_STAGE_VERTEX_BIT,
+            0),
+        // Binding 1 : Fragment shader image sampler
+        vkTools::initializers::descriptorSetLayoutBinding(
+            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            VK_SHADER_STAGE_FRAGMENT_BIT,
+            1),
+        // Binding 2 : Fragment shader image sampler
+        vkTools::initializers::descriptorSetLayoutBinding(
+            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            VK_SHADER_STAGE_FRAGMENT_BIT,
+            2)
+    };
+
+    VkDescriptorSetLayoutCreateInfo descriptorLayout =
+        vkTools::initializers::descriptorSetLayoutCreateInfo(
+            setLayoutBindings.data(),
+            setLayoutBindings.size());
+
+    VkResult err = vkCreateDescriptorSetLayout(device, &descriptorLayout, nullptr, &descriptorSetLayout);
+    assert(!err);
+
+    VkPipelineLayoutCreateInfo pPipelineLayoutCreateInfo =
+        vkTools::initializers::pipelineLayoutCreateInfo(
+            &descriptorSetLayout,
+            1);
+
+    err = vkCreatePipelineLayout(device, &pPipelineLayoutCreateInfo, nullptr, &pipelineLayout);
+    assert(!err);
+
+
+}
+
+void VulkanFire::prepareRenderPipelines(VkRenderPass renderPass,std::string assetPath){
+
+    VkPipelineInputAssemblyStateCreateInfo inputAssemblyState =
+        vkTools::initializers::pipelineInputAssemblyStateCreateInfo(
+            VK_PRIMITIVE_TOPOLOGY_POINT_LIST,
+            0,
+            VK_FALSE);
+
+    VkPipelineRasterizationStateCreateInfo rasterizationState =
+        vkTools::initializers::pipelineRasterizationStateCreateInfo(
+            VK_POLYGON_MODE_FILL,
+            VK_CULL_MODE_BACK_BIT,
+            VK_FRONT_FACE_CLOCKWISE,
+            0);
+
+    VkPipelineColorBlendAttachmentState blendAttachmentState =
+        vkTools::initializers::pipelineColorBlendAttachmentState(
+            0xf,
+            VK_FALSE);
+
+    VkPipelineColorBlendStateCreateInfo colorBlendState =
+        vkTools::initializers::pipelineColorBlendStateCreateInfo(
+            1,
+            &blendAttachmentState);
+
+    VkPipelineDepthStencilStateCreateInfo depthStencilState =
+        vkTools::initializers::pipelineDepthStencilStateCreateInfo(
+            VK_TRUE,
+            VK_TRUE,
+            VK_COMPARE_OP_LESS_OR_EQUAL);
+
+    VkPipelineViewportStateCreateInfo viewportState =
+        vkTools::initializers::pipelineViewportStateCreateInfo(1, 1, 0);
+
+    VkPipelineMultisampleStateCreateInfo multisampleState =
+        vkTools::initializers::pipelineMultisampleStateCreateInfo(
+            VK_SAMPLE_COUNT_1_BIT,
+            0);
+
+    std::vector<VkDynamicState> dynamicStateEnables = {
+        VK_DYNAMIC_STATE_VIEWPORT,
+        VK_DYNAMIC_STATE_SCISSOR
+    };
+    VkPipelineDynamicStateCreateInfo dynamicState =
+        vkTools::initializers::pipelineDynamicStateCreateInfo(
+            dynamicStateEnables.data(),
+            dynamicStateEnables.size(),
+            0);
+
+    // Load shaders
+    std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages;
+
+    shaderStages[0] = exampleBase->loadShader(assetPath + "shaders/particlefire/particle.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+    shaderStages[1] = exampleBase->loadShader(assetPath + "shaders/particlefire/particle.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
+
+    VkGraphicsPipelineCreateInfo pipelineCreateInfo =
+        vkTools::initializers::pipelineCreateInfo(
+            pipelineLayout,
+            renderPass,
+            0);
+
+    pipelineCreateInfo.pVertexInputState = &attributesParticles.inputState;
+    pipelineCreateInfo.pInputAssemblyState = &inputAssemblyState;
+    pipelineCreateInfo.pRasterizationState = &rasterizationState;
+    pipelineCreateInfo.pColorBlendState = &colorBlendState;
+    pipelineCreateInfo.pMultisampleState = &multisampleState;
+    pipelineCreateInfo.pViewportState = &viewportState;
+    pipelineCreateInfo.pDepthStencilState = &depthStencilState;
+    pipelineCreateInfo.pDynamicState = &dynamicState;
+    pipelineCreateInfo.stageCount = shaderStages.size();
+    pipelineCreateInfo.pStages = shaderStages.data();
+
+    depthStencilState.depthWriteEnable = VK_FALSE;
+
+    // Premulitplied alpha
+    blendAttachmentState.blendEnable = VK_TRUE;
+    blendAttachmentState.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+    blendAttachmentState.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    blendAttachmentState.colorBlendOp = VK_BLEND_OP_ADD;
+    blendAttachmentState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    blendAttachmentState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    blendAttachmentState.alphaBlendOp = VK_BLEND_OP_ADD;
+    blendAttachmentState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+
+    VkPipelineCache pipelineCache;
+
+    VkPipelineCacheCreateInfo pipelineCacheCreateInfo = {};
+    pipelineCacheCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+    VK_CHECK_RESULT(vkCreatePipelineCache(device, &pipelineCacheCreateInfo, nullptr, &pipelineCache));
+
+    VkResult err = vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCreateInfo, nullptr, &drawParticles);
     assert(!err);
 }
 
-void VulkanFire::updateParticle(btVector3 ori, int index)
+
+/*void VulkanFire::updateParticle(btVector3 ori, int index)
 {
     Particle* particle = &particleBuffer.at(index);
     float particleTimer = 0.0003 * 0.45f;
@@ -163,10 +691,11 @@ void VulkanFire::updateParticle(btVector3 ori, int index)
     }
     size_t size = particleBuffer.size() * sizeof(Particle);
     memcpy(particleVkBuffer.mappedMemory, particleBuffer.data(), size);
-}
+}*/
 
 void VulkanFire::setupDescriptorSet(VkDescriptorPool pool, VkDescriptorSetLayout descriptorSetLayout,VkSampler sampler,vkTools::VulkanTexture fire,vkTools::VulkanTexture smoke)
 {
+    prepareRenderLayout(pool);
     VkDescriptorSetAllocateInfo allocInfo =
         vkTools::initializers::descriptorSetAllocateInfo(
             pool,
@@ -224,12 +753,27 @@ void VulkanFire::prepareUniformBuffers()
         &uniformData.buffer,
         &uniformData.memory,
         &uniformData.descriptor);
+
+
+    computeUbo.deltaT=0.0f;
+
+    // Compute shader uniform buffer block
+    exampleBase->createBuffer(
+        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        sizeof(computeUbo),
+        &computeUbo,
+        &computeUniformBuffer.buffer,
+        &computeUniformBuffer.memory,
+        &computeUniformBuffer.descriptor);
+
+    // Map for host access
+    vkTools::checkResult(vkMapMemory(device, computeUniformBuffer.memory, 0, sizeof(computeUbo), 0, (void **)&computeUniformBuffer.mapped));
 }
 
 void VulkanFire::addToWorld(btDiscreteDynamicsWorld* dw){
-    for (auto& particle : particleBuffer)
+    /*for (auto& particle : particleBuffer)
     {
         dw->addRigidBody(particle.body);
         particle.body->setGravity(btVector3(0.0f,0.0f,0.0f));
-    }
+    }*/
 }

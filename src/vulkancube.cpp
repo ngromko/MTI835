@@ -15,11 +15,18 @@ VulkanCube::VulkanCube(VkDevice device, VulkanExampleBase *example,glm::vec3 hal
 {
     this->device = device;
     this->exampleBase = example;
-    allo = prepareVertices(halfSize,color);
+    prepareVertices(halfSize,color);
     prepareRigidBody(halfSize, startPos, mass);
     prepareUniformBuffer(startPos);
+}
 
-
+VulkanCube::VulkanCube(VkDevice device, VulkanExampleBase *example,glm::vec3 halfSize,glm::vec3 color, glm::vec3 startPos,float mass,std::vector<glm::vec3>& points)
+{
+    this->device = device;
+    this->exampleBase = example;
+    points = prepareVertices(halfSize,color);
+    prepareRigidBody(halfSize, startPos, mass);
+    prepareUniformBuffer(startPos);
 }
 
 VulkanCube::~VulkanCube()

@@ -17,6 +17,9 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/matrix_inverse.hpp>
 
+#include <Fade_2D.h>
+using namespace GEOM_FADE2D;
+
 #include "vulkanObject.h"
 
 #include "vulkanexamplebase.h"
@@ -30,6 +33,8 @@
 #define PARTICLE_TYPE_FLAME 0
 #define PARTICLE_TYPE_SMOKE 1
 
+#define VERTEX_BUFFER_BIND_ID 0
+
 struct Particle {
 	glm::vec4 pos;
 	glm::vec4 color;
@@ -38,49 +43,82 @@ struct Particle {
 	float rotation;
 	uint32_t type;
 	// Attributes not used in shader
+    glm::vec4 vel;
 	float rotationSpeed;
-    btRigidBody* body;
     int index;
+};
+
+struct BurningPoint{
+    float pos[3];
+    unsigned int neighboors[6];
+    unsigned int nCount;
+    short state;
 };
 
 class VulkanFire : public VulkanObject
 {
 private:
-    glm::vec3 emitterPos = glm::vec3(0.0f, 0.0f, 0.0f);
-    glm::vec3 minVel = glm::vec3(-3.0f, 0.5f, -3.0f);
-    glm::vec3 maxVel = glm::vec3(3.0f, 3.0f, 3.0f);
+    VkPipeline propageFire;
+    VkPipeline updateParticles;
+    VkPipeline clickFire;
 
-	struct {
-		VkBuffer buffer;
-		VkDeviceMemory memory;
-		// Store the mapped address of the particle data for reuse
-		void *mappedMemory;
-		// Size of the particle buffer in bytes
-		size_t size;
-    } particleVkBuffer;
+    VkQueue computeQueue;
+    VkPipelineLayout computePipelineLayout;
+    VkDescriptorSet computeDescriptorSet;
+    VkDescriptorSetLayout computeDescriptorSetLayout;
 
-	VkDescriptorSet descriptorSet;
+    VkPipelineLayout pipelineLayout;
+    VkDescriptorSetLayout descriptorSetLayout;
+    VkDescriptorSet descriptorSet;
+    VkPipeline drawParticles;
+
+    struct Attributes{
+        VkPipelineVertexInputStateCreateInfo inputState;
+        std::vector<VkVertexInputBindingDescription> bindingDescriptions;
+        std::vector<VkVertexInputAttributeDescription> attributeDescriptions;
+    };
+
+    Attributes attributesParticles;
+    Attributes attributesBPoints;
+
+    struct {
+        float deltaT;
+        glm::vec4 clickPos;
+        int32_t particleCount;
+        int32_t bPointsCount;
+    } computeUbo;
+
+    vkTools::UniformData bPointsStorageBuffer;
+    vkTools::UniformData particlesStorageBuffer;
+    vkTools::UniformData computeUniformBuffer;
+
+    std::vector<BurningPoint> burningPoints;
 
     VulkanExampleBase *exampleBase;
-
-	std::vector<Particle> particleBuffer;
 
     float rnd(float range);
     void initParticle(Particle *particle, int index);
     void reset(Particle *particle);
 
     void transitionParticle(Particle *particle);
-    void prepareParticles();
+    void prepareParticles(VkQueue);
     // Prepare and initialize uniform buffer containing shader uniforms
     void prepareUniformBuffers();
+    void addBurningPoints(std::vector<glm::vec3> data);
+    void triangulate(std::vector<glm::vec3> data,int i,std::vector<glm::vec3>& allPoints);
+    void prepareBurningPoints(VkQueue);
+    void prepareComputeLayout(VkDescriptorPool descriptorPool);
+    void setupDescriptorSet(VkDescriptorPool pool, VkDescriptorSetLayout descriptorSetLayout,VkSampler,vkTools::VulkanTexture fire,vkTools::VulkanTexture smoke);
+    void prepareComputePipelines(std::string assetPath);
+    void prepareRenderLayout(VkDescriptorPool descriptorPool);
+    void prepareRenderPipelines(VkRenderPass,std::string);
 
 public:
-    void draw(VkCommandBuffer cmdbuffer, VkPipelineLayout pipelineLayout);
-    void updateParticle(btVector3,int);
+    void draw(VkCommandBuffer cmdbuffer);
+    void clicked(btVector3);
+    void compute(float frameTimer);
 
-    void loadTextures();
-    void setupDescriptorSet(VkDescriptorPool pool, VkDescriptorSetLayout descriptorSetLayout,VkSampler,vkTools::VulkanTexture fire,vkTools::VulkanTexture smoke);
-    VulkanFire(VkDevice device, VulkanExampleBase *example,glm::vec3 pos);
+    VulkanFire(VkDevice device, VulkanExampleBase *example,VkQueue,VkRenderPass,VkDescriptorPool pool);
 
     void addToWorld(btDiscreteDynamicsWorld*);
 

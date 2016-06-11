@@ -33,6 +33,10 @@ public:
         ubo.view = view;
         updateUniformBuffer();
     }
+    ~VulkanObject(){
+        vkDestroyBuffer(device, uniformData.buffer, nullptr);
+        vkFreeMemory(device, uniformData.memory, nullptr);
+    }
 
 private:
     void updateUniformBuffer(){
