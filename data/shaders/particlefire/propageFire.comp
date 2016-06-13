@@ -3,77 +3,78 @@
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_ARB_shading_language_420pack : enable
 
-struct Particle
-{
-	vec2 pos;
-	vec2 vel;
-	vec4 gradientPos;
+struct Particle {
+    vec4 pos;
+    vec4 color;
+    vec4 color1;
+    /*float alpha;
+    float size;
+    float rotation;
+    uint type;*/
+    // Attributes not used in shader
+    vec4 vel;
 };
 
-// Binding 0 : Position storage buffer
-layout(std140, binding = 0) buffer Pos 
+struct BurningPoint
+{
+    vec4 pos;
+    uint neighs[10];
+    uint nCount;
+    uint state;
+};
+layout(std430, binding = 0) buffer Bumbo
 {
    Particle particles[ ];
 };
-
-layout (local_size_x = 16, local_size_y = 16) in;
-
-layout (binding = 2) uniform UBO 
+// Binding 1 : Position storage buffer
+layout(std430,binding = 1) buffer Burning
 {
-	float deltaT;
-	float destX;
-	float destY;
-	int particleCount;
+   BurningPoint bPoints[];
+};
+
+layout (local_size_x = 512) in;
+
+layout (binding = 2) uniform UBO
+{
+        //float deltaT;
+        vec4 delta;
+        vec4 click;
+        int pCount;
+        int bCount;
+        int bCount3;
 } ubo;
-
-vec2 attraction(vec2 pos, vec2 attractPos) 
-{
-    vec2 delta = attractPos - pos;
-	const float damp = 0.5;
-    float dDampedDot = dot(delta, delta) + damp;
-    float invDist = 1.0f / sqrt(dDampedDot);
-    float invDistCubed = invDist*invDist*invDist;
-    return delta * invDistCubed * 0.0035;
-}
-
-vec2 repulsion(vec2 pos, vec2 attractPos)
-{
-	vec2 delta = attractPos - pos;
-	float targetDistance = sqrt(dot(delta, delta));
-	return delta * (1.0 / (targetDistance * targetDistance * targetDistance)) * -0.000035;
-}
 
 void main() 
 {
     // Current SSBO index
     uint index = gl_GlobalInvocationID.x;
 	// Don't try to write beyond particle count
-    if (index >= ubo.particleCount) 
+        // Faire rien si le point ne brule pas
+    if (index >= ubo.bCount /*&& bPoints[index].state!=1*/)
 		return;	
+    BurningPoint me = bPoints[index];
 
-    // Read position and velocity
-    vec2 vVel = particles[index].vel.xy;
-    vec2 vPos = particles[index].pos.xy;
-
-    vec2 destPos = vec2(ubo.destX, ubo.destY);
-
-    vec2 delta = destPos - vPos;
-    float targetDistance = sqrt(dot(delta, delta));
-    vVel += repulsion(vPos, destPos.xy) * 0.05;
-
-    // Move by velocity
-    vPos += vVel * ubo.deltaT;
-
-    // collide with boundary
-    if ((vPos.x < -1.0) || (vPos.x > 1.0) || (vPos.y < -1.0) || (vPos.y > 1.0))
-    	vVel = (-vVel * 0.1) + attraction(vPos, destPos) * 12;
-    else
-    	particles[index].pos.xy = vPos;
-
-    // Write back
-    particles[index].vel.xy = vVel;
-	particles[index].gradientPos.x += 0.02 * ubo.deltaT;
-	if (particles[index].gradientPos.x > 1.0)
-		particles[index].gradientPos.x -= 1.0;
+    //uint pIndex =  me.state;
+    if(me.state>=1000){
+        for(int i=0;i<me.nCount;i++){
+            if(bPoints[me.neighs[i]].state<=1000){
+                bPoints[me.neighs[i]].state++;
+            }
+        }
+        particles[index].pos=bPoints[index].pos;
+        //particles[index].type=0;
+        //particles[index].color = vec4(1.0f);
+    }
+    
+    /*
+    pIndex++;
+    if(pIndex>=6)
+        pIndex=0;
+    me.partIndex=pIndex;*/
+    
+    //float particleTimer = ubo.deltaT * 0.45f;
+    /*particles[index].alpha += particleTimer * 2.5f;
+    particles[index].size -= particleTimer * 0.5f;
+    particles[index+8000].pos.y = ubo.bCount;*/
 }
 

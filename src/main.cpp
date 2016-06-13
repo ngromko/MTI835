@@ -29,7 +29,7 @@
 #include "particlefire.h"
 
 #define VERTEX_BUFFER_BIND_ID 0
-#define ENABLE_VALIDATION false
+#define ENABLE_VALIDATION true
 
 class VulkanExample: public VulkanExampleBase 
 {
@@ -86,9 +86,6 @@ public:
         //vkDestroyPipeline(device, pipelines.wireFrame, nullptr);
         //vkDestroyPipeline(device, pipelines.texture, nullptr);
 
-
-        vkDestroyPipeline(device, pipelines.fire, nullptr);
-
         vkDestroySampler(device, textures.sampler, nullptr);
 		
 		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
@@ -142,6 +139,8 @@ public:
 
     void buildCommandBuffers()
     {
+        fire->init(queue,cmdPool,renderPass,descriptorPool,textures.sampler,textures.fire,textures.smoke,getAssetPath());
+
         VkCommandBufferBeginInfo cmdBufInfo = vkTools::initializers::commandBufferBeginInfo();
 
         VkClearValue clearValues[2];
@@ -161,11 +160,15 @@ public:
 
         for (int32_t i = 0; i < drawCmdBuffers.size(); ++i)
         {
+
+
             // Set target frame buffer
             renderPassBeginInfo.framebuffer = frameBuffers[i];
 
             err = vkBeginCommandBuffer(drawCmdBuffers[i], &cmdBufInfo);
             assert(!err);
+
+            fire->compute(drawCmdBuffers[i]);
 
             vkCmdBeginRenderPass(drawCmdBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
@@ -189,8 +192,6 @@ public:
             {
                 cube->draw(drawCmdBuffers[i], pipelineLayout);
             }
-
-            vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.fire);
 
             fire->draw(drawCmdBuffers[i]);
 
@@ -218,10 +219,10 @@ public:
 
         dynamicsWorld->setGravity(btVector3(0,-10,0));
 
-       for(int i=0;i<3 ;i++){
-           dynamicsWorld->addRigidBody(cubes.at(i)->getRigidBody());
+       for(auto& cube : cubes){
+           dynamicsWorld->addRigidBody(cube->getRigidBody());
        }
-       fire->addToWorld(dynamicsWorld);
+       //fire->addToWorld(dynamicsWorld);
     }
 
 	void draw()
@@ -253,12 +254,16 @@ public:
 
 	void prepareVertices()
 	{
+        fire=new VulkanFire(device,this);
+
         std::vector<glm::vec3> allo;
-        cubes.push_back(new VulkanCube(device,this,glm::vec3(10.0,0.1,10.0),glm::vec3(0.1,0.1,0.1),glm::vec3(0,-0.6,0),0));
+        //cubes.push_back(new VulkanCube(device,this,glm::vec3(10.0,0.1,10.0),glm::vec3(0.1,0.1,0.1),glm::vec3(0,-0.6,0),0));
 
-        cubes.push_back(new VulkanCube(device,this,glm::vec3(0.5,0.5,0.5),glm::vec3(1,0,0),glm::vec3(0,0,0),0,allo));
+        cubes.push_back(new VulkanCube(device,this,glm::vec3(1.0f,1.0f,1.0f),glm::vec3(1,0,0),glm::vec3(0,0,0),0,allo));
 
-        cubes.push_back(new VulkanCube(device,this,glm::vec3(0.5,0.5,0.5),glm::vec3(0,0,1),glm::vec3(0.5,2,0.5),1));
+        //cubes.push_back(new VulkanCube(device,this,glm::vec3(0.5,0.5,0.5),glm::vec3(0,0,1),glm::vec3(0.5,2,0.5),1));
+
+        fire->addBurningPoints(allo);
 
 		// Binding description
 		vertices.bindingDescriptions.resize(1);
@@ -312,8 +317,8 @@ public:
 		// Example uses one ubo and one combined image sampler 
 		std::vector<VkDescriptorPoolSize> poolSizes =
 		{
-            vkTools::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, cubes.size()+1),
-            vkTools::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 4),
+            vkTools::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 20),
+            vkTools::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 10),
             vkTools::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 10),
 		};
 
@@ -321,7 +326,7 @@ public:
 			vkTools::initializers::descriptorPoolCreateInfo(
 				poolSizes.size(),
 				poolSizes.data(),
-                cubes.size()+1);
+                10);
 
 		VkResult vkRes = vkCreateDescriptorPool(device, &descriptorPoolInfo, nullptr, &descriptorPool);
 		assert(!vkRes);
@@ -499,6 +504,7 @@ public:
         if (!prepared)
             return;
         dynamicsWorld->stepSimulation(frameTimer);
+        fire->updateTime(frameTimer);
 		vkDeviceWaitIdle(device);
 		draw();
 		vkDeviceWaitIdle(device);
@@ -558,10 +564,7 @@ public:
         );
         if(RayCallback.hasHit()) {
             std::cout << "hit called "<< RayCallback.m_hitPointWorld.x() << " " << RayCallback.m_hitPointWorld.y() << " " << RayCallback.m_hitPointWorld.z()<< std::endl;
-            //trans.setOrigin(RayCallback.m_hitPointWorld);
-
-            //selectBody->setWorldTransform(trans);
-
+            fire->cliked(queue,glm::vec4());
         }
         else{
             //trans.setOrigin(btVector3(0,0,0));

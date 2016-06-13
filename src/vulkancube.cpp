@@ -9,7 +9,6 @@
 */
 
 #include "VulkanCube.h"
-#include "Fade_2D.h"
 
 VulkanCube::VulkanCube(VkDevice device, VulkanExampleBase *example,glm::vec3 halfSize,glm::vec3 color, glm::vec3 startPos,float mass)
 {
