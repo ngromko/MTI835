@@ -48,22 +48,35 @@ struct Particle {
 
 struct BurningPoint{
     glm::vec4 pos;
+    glm::vec4 basePos;
     uint32_t neighboors[10];
     uint32_t nCount;
     uint32_t state;
 };
 
-class VulkanFire : public VulkanObject
+class VulkanFire
 {
 private:
+
+    vkTools::UniformData uniformData;
+
+    struct{
+        glm::mat4 projection;
+        glm::mat4 view;
+    } ubo;
+
+    VkDevice device;
+
     VkPipeline propageFire;
     VkPipeline updateParticles;
     VkPipeline clickFire;
+    VkPipeline moveBurnPipeline;
 
     VkQueue computeQueue;
     VkCommandBuffer clickCmd;
     VkPipelineLayout computePipelineLayout;
     VkDescriptorSet computeDescriptorSet;
+    VkDescriptorSet moveBurnDescriptorSet;
     VkDescriptorSetLayout computeDescriptorSetLayout;
 
     VkPipelineLayout pipelineLayout;
@@ -91,6 +104,7 @@ private:
 
     vkTools::UniformData bPointsStorageBuffer;
     vkTools::UniformData particlesStorageBuffer;
+    vkTools::UniformData modelsStorageBuffer;
     vkTools::UniformData computeUniformBuffer;
 
     std::vector<BurningPoint> burningPoints;
@@ -107,21 +121,23 @@ private:
     void prepareUniformBuffers();
     void triangulate(std::vector<glm::vec3> data,int i,std::vector<glm::vec3>& allPoints);
     void prepareBurningPoints(VkQueue);
-    void prepareComputeLayout(VkDescriptorPool descriptorPool);
+    void prepareComputeLayout(VkDescriptorPool descriptorPool, VkDescriptorBufferInfo*);
     void setupDescriptorSet(VkDescriptorPool pool,VkSampler,vkTools::VulkanTexture fire,vkTools::VulkanTexture smoke);
     void prepareComputePipelines(std::string assetPath);
     void prepareRenderLayout(VkDescriptorPool descriptorPool);
     void prepareRenderPipelines(VkRenderPass,std::string);
     void createClickCommand(VkCommandPool cmdPool);
+    void updateUniformBuffer();
 
 public:
     void draw(VkCommandBuffer cmdbuffer);
     void compute(VkCommandBuffer cmdbuffer);
     void updateTime(float frameTimer);
-    void init(VkQueue queue,VkCommandPool cpool, VkRenderPass renderpass,VkDescriptorPool pool,VkSampler sampler,vkTools::VulkanTexture fire,vkTools::VulkanTexture smoke, std::string path);
+    void init(VkQueue queue,VkCommandPool cpool, VkRenderPass renderpass,VkDescriptorPool pool,VkDescriptorBufferInfo*,VkSampler sampler,vkTools::VulkanTexture fire,vkTools::VulkanTexture smoke, std::string path);
     void cliked(VkQueue queue, glm::vec4 pos);
-    void addBurningPoints(std::vector<glm::vec3> data);
-
+    void addBurningPoints(std::vector<glm::vec3> data, uint32_t objectNumber);
+    void updateProjView(glm::mat4 projection, glm::mat4 view);
+    void VulkanFire::buildMoveBurnCommand(VkCommandBuffer& cmd);
 
     VulkanFire(VkDevice device, VulkanExampleBase *example);
 

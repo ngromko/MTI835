@@ -57,9 +57,12 @@ public:
 
     btDiscreteDynamicsWorld* dynamicsWorld;
 
-    std::vector<VulkanCube*> cubes;
-    VulkanFire* fire;
+    vkTools::UniformData objectsUniforme;
 
+    std::vector<VulkanCube*> cubes;
+    std::vector<VulkanCube*> burningCubes;
+    VulkanFire* fire;
+    int stop=0;
 	VkPipelineLayout pipelineLayout;
 	VkDescriptorSet descriptorSet;
 	VkDescriptorSetLayout descriptorSetLayout;
@@ -94,6 +97,8 @@ public:
 		textureLoader->destroyTexture(textureColorMap);
         textureLoader->destroyTexture(textures.smoke);
         textureLoader->destroyTexture(textures.fire);
+
+        vkUnmapMemory(device, objectsUniforme.memory);
 	}
 
     void loadTextures()
@@ -139,8 +144,6 @@ public:
 
     void buildCommandBuffers()
     {
-        fire->init(queue,cmdPool,renderPass,descriptorPool,textures.sampler,textures.fire,textures.smoke,getAssetPath());
-
         VkCommandBufferBeginInfo cmdBufInfo = vkTools::initializers::commandBufferBeginInfo();
 
         VkClearValue clearValues[2];
@@ -192,6 +195,10 @@ public:
             {
                 cube->draw(drawCmdBuffers[i], pipelineLayout);
             }
+            for (auto& cube : burningCubes)
+            {
+                cube->draw(drawCmdBuffers[i], pipelineLayout);
+            }
 
             fire->draw(drawCmdBuffers[i]);
 
@@ -215,14 +222,17 @@ public:
         ///the default constraint solver. For parallel processing you can use a different solver (see Extras/BulletMultiThreaded)
         btSequentialImpulseConstraintSolver* solver = new btSequentialImpulseConstraintSolver;
 
-       dynamicsWorld = new btDiscreteDynamicsWorld(dispatcher,overlappingPairCache,solver,collisionConfiguration);
+        dynamicsWorld = new btDiscreteDynamicsWorld(dispatcher,overlappingPairCache,solver,collisionConfiguration);
 
-        dynamicsWorld->setGravity(btVector3(0,-10,0));
+        dynamicsWorld->setGravity(btVector3(0,-2,0));
 
-       for(auto& cube : cubes){
+        for (auto& cube : cubes)
+        {
+            dynamicsWorld->addRigidBody(cube->getRigidBody());
+        }
+        for(auto& cube : burningCubes){
            dynamicsWorld->addRigidBody(cube->getRigidBody());
-       }
-       //fire->addToWorld(dynamicsWorld);
+        }
     }
 
 	void draw()
@@ -257,13 +267,17 @@ public:
         fire=new VulkanFire(device,this);
 
         std::vector<glm::vec3> allo;
-        //cubes.push_back(new VulkanCube(device,this,glm::vec3(10.0,0.1,10.0),glm::vec3(0.1,0.1,0.1),glm::vec3(0,-0.6,0),0));
+        cubes.push_back(new VulkanCube(device,this,glm::vec3(10.0,0.1,10.0),glm::vec3(0.1,0.1,0.1),glm::vec3(0,-0.6,0),0));
 
-        cubes.push_back(new VulkanCube(device,this,glm::vec3(1.0f,1.0f,1.0f),glm::vec3(1,0,0),glm::vec3(0,0,0),0,allo));
+        burningCubes.push_back(new VulkanCube(device,this,glm::vec3(1.0f,0.5f,1.0f),glm::vec3(1,0,0),glm::vec3(-1.5,2,0.5),1,allo));
 
-        //cubes.push_back(new VulkanCube(device,this,glm::vec3(0.5,0.5,0.5),glm::vec3(0,0,1),glm::vec3(0.5,2,0.5),1));
+        fire->addBurningPoints(allo,0);
 
-        fire->addBurningPoints(allo);
+        burningCubes.push_back(new VulkanCube(device,this,glm::vec3(0.5,0.5,0.5),glm::vec3(0,0,1),glm::vec3(0.5,2,0.5),1,allo));
+
+        std::cout <<" afaegag "<< allo.size() << std::endl;
+
+        fire->addBurningPoints(allo,1);
 
 		// Binding description
 		vertices.bindingDescriptions.resize(1);
@@ -372,10 +386,52 @@ public:
 
     void setupDescriptorSets()
     {
+
+        VkDeviceSize  size = 16*4*burningCubes.size();
+        createBuffer(
+            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+            size,
+            nullptr,
+            &objectsUniforme.buffer,
+            &objectsUniforme.memory,
+            &objectsUniforme.descriptor);
+
+        fire->init(queue,cmdPool,renderPass,descriptorPool, &objectsUniforme.descriptor, textures.sampler,textures.fire,textures.smoke,getAssetPath());
+        uint32_t offset =0;
+        uint8_t* pData;
+
+        VkResult err = vkMapMemory(device, objectsUniforme.memory, 0, size, 0, (void **)&pData);
+        assert(!err);
+
         for (auto& cube : cubes)
         {
-            cube->setupDescriptorSet(descriptorPool, descriptorSetLayout);
+            cube->setupDescriptorSet(descriptorPool, descriptorSetLayout,offset ,pData);
         }
+        for (auto& cube : burningCubes)
+        {
+            cube->setupDescriptorSet(descriptorPool, descriptorSetLayout,offset ,pData);
+            offset+=16*4;
+        }
+
+        VkCommandBuffer moveBurnCmd;
+
+        VkCommandBufferAllocateInfo cmdBufAllocateInfo =
+            vkTools::initializers::commandBufferAllocateInfo(
+                cmdPool,
+                VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+                1);
+
+        VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &moveBurnCmd));
+
+        fire->buildMoveBurnCommand(moveBurnCmd);
+
+        for (auto& cube : burningCubes)
+        {
+            cube->setupBurnCommand(queue,moveBurnCmd);
+        }
+
+
     }
 
     void preparePipelinesCubes()
@@ -472,6 +528,10 @@ public:
         {
             cube->updateProjView(proj,view);
         }
+        for (auto& cube : burningCubes)
+        {
+            cube->updateProjView(proj,view);
+        }
         fire->updateProjView(proj,view);
 	}
 
@@ -487,15 +547,7 @@ public:
 		buildCommandBuffers();
         buildBulletScene();
 
-        glm::mat4 proj = glm::perspective(glm::radians(60.0f), (float)width / (float)height, 0.1f, 256.0f);
-        glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 5),glm::vec3(0,0,0),glm::vec3(0,1,0));
-        view = glm::scale(view,glm::vec3(1,-1,1));
-
-        for (auto& cube : cubes)
-        {
-            cube->updateProjView(proj,view);
-        }
-        fire->updateProjView(proj,view);
+        updateUniformBuffers();
 		prepared = true;
 	}
 
@@ -506,7 +558,7 @@ public:
         dynamicsWorld->stepSimulation(frameTimer);
         fire->updateTime(frameTimer);
 		vkDeviceWaitIdle(device);
-		draw();
+        draw();
 		vkDeviceWaitIdle(device);
 	}
 
@@ -564,7 +616,7 @@ public:
         );
         if(RayCallback.hasHit()) {
             std::cout << "hit called "<< RayCallback.m_hitPointWorld.x() << " " << RayCallback.m_hitPointWorld.y() << " " << RayCallback.m_hitPointWorld.z()<< std::endl;
-            fire->cliked(queue,glm::vec4());
+            fire->cliked(queue,glm::vec4( RayCallback.m_hitPointWorld.x(), RayCallback.m_hitPointWorld.y(), RayCallback.m_hitPointWorld.z(),0.0f));
         }
         else{
             //trans.setOrigin(btVector3(0,0,0));

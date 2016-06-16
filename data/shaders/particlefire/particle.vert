@@ -19,7 +19,6 @@ layout (location = 4) out float outRotation;
 layout (binding = 0) uniform UBO 
 {
 	mat4 projection;
-	mat4 modelview;
 	mat4 view;
 } ubo;
 
@@ -39,7 +38,7 @@ void main ()
 	
         gl_PointSize = outPointSize;*/
 		
-        gl_Position = ubo.projection * ubo.view * ubo.modelview * vec4(inPos.xyz, 1.0);
+        gl_Position = ubo.projection * ubo.view * vec4(inPos.xyz, 1.0);
 	
 	float pointDist = (gl_Position.w == 0.0) ? 0.00001 : gl_Position.w;
 	

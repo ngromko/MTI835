@@ -18,6 +18,7 @@ struct Particle {
 struct BurningPoint
 {
     vec4 pos;
+    vec4 basePos;
     uint neighs[10];
     uint nCount;
     uint state;
@@ -53,17 +54,22 @@ void main()
     if (index >= ubo.bCount /*&& bPoints[index].state!=1*/)
 		return;	
     BurningPoint me = bPoints[index];
+    
+    uint ncount = me.nCount&15;
 
     //uint pIndex =  me.state;
     if(me.state>=1000){
-        for(int i=0;i<me.nCount;i++){
+        for(int i=0;i<ncount;i++){
             if(bPoints[me.neighs[i]].state<=1000){
                 bPoints[me.neighs[i]].state++;
             }
         }
-        particles[index].pos=bPoints[index].pos;
-        //particles[index].type=0;
-        //particles[index].color = vec4(1.0f);
+        me.state++;
+        if(me.state>=3100.0f){
+            particles[index].pos=bPoints[index].pos;
+            me.state=1001;
+        }
+        bPoints[index].state=me.state;
     }
     
     /*

@@ -6,10 +6,26 @@
 struct BurningPoint
 {
     vec4 pos;
-    uint nP1[6];
-    uint nCount;
-    uint state;
-    uint partIndex;
+    vec4 basePos;
+    uvec4 bob;
+    uvec4 bobb;
+    uvec4 bobb3;
+};
+
+struct Particle {
+    vec4 pos;
+    vec4 color;
+    float alpha;
+    float size;
+    float rotation;
+    uint type;
+    // Attributes not used in shader
+    vec4 vel;
+};
+
+layout(std140, binding = 0) buffer Bumbo
+{
+   Particle particles[ ];
 };
 
 // Binding 1 : Position storage buffer
@@ -20,12 +36,14 @@ layout(std140, binding = 1) buffer Burn
 
 layout (local_size_x = 512) in;
 
-layout (binding = 2) uniform UBO 
+layout (binding = 2) uniform UBO
 {
-	float deltaT;
+        //float deltaT;
+        vec4 delta;
         vec4 click;
         int pCount;
         int bCount;
+        int bCount3;
 } ubo;
 
 void main() 
@@ -38,6 +56,6 @@ void main()
     vec3 dist = bPoints[index].pos.xyz-ubo.click.xyz;
     float d = dot(dist,dist);
     if(d<0.0121)
-        bPoints[index].state=1;
+        bPoints[index].bobb3.w=10000;
 }
 

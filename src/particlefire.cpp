@@ -97,7 +97,7 @@ void VulkanFire::draw(VkCommandBuffer cmdbuffer)
     vkCmdDraw(cmdbuffer, computeUbo.particleCount, 1, 0, 0);
 }
 
-void VulkanFire::addBurningPoints(std::vector<glm::vec3> data){
+void VulkanFire::addBurningPoints(std::vector<glm::vec3> data, uint32_t objectNumber){
 
     int size = data.size();
     std::cout<<size<<std::endl;
@@ -108,11 +108,12 @@ void VulkanFire::addBurningPoints(std::vector<glm::vec3> data){
         triangulate(data,i,allPoints);
     }
 
-std::cout<<allPoints.size()<<std::endl;
+    uint32_t bSize = burningPoints.size();
     for(int i=0;i<allPoints.size();i++){
-        bp.pos[0] = allPoints[i].x;
-        bp.pos[1] = allPoints[i].y;
-        bp.pos[2] = allPoints[i].z;
+        bp.pos[0] = bp.basePos[0] = allPoints[i].x;
+        bp.pos[1] = bp.basePos[1] = allPoints[i].y;
+        bp.pos[2] = bp.basePos[2] = allPoints[i].z;
+        bp.basePos[3]=1.0f;
         bp.nCount = 0;
         bp.state = 0;
         for(int j=0;j<allPoints.size();j++){
@@ -120,7 +121,7 @@ std::cout<<allPoints.size()<<std::endl;
                 glm::vec3 diff = allPoints[j] - allPoints[i];
                 float d = glm::dot(diff,diff);
                 if(d<0.0121){
-                    bp.neighboors[bp.nCount]=j;
+                    bp.neighboors[bp.nCount]=j+bSize;
                     bp.nCount++;
                 }
                 if(bp.nCount==10){
@@ -128,9 +129,10 @@ std::cout<<allPoints.size()<<std::endl;
                 }
             }
         }
+        bp.nCount+=objectNumber<<16;
         burningPoints.push_back(bp);
     }
-    burningPoints[0].state=10002;
+    //burningPoints[0].state=10000;
     std::cout<<"bpointsize "<<burningPoints.size()<<std::endl;
     computeUbo.bPointsCount = burningPoints.size();std::cout<<"bpointsizce "<<computeUbo.bPointsCount<<std::endl;
 }
@@ -197,13 +199,13 @@ void VulkanFire::triangulate(std::vector<glm::vec3> data,int i,std::vector<glm::
     vCG.clear();
 }
 
-void VulkanFire::init(VkQueue queue,VkCommandPool cpool, VkRenderPass renderpass,VkDescriptorPool pool,VkSampler sampler,vkTools::VulkanTexture fire,vkTools::VulkanTexture smoke, std::string path){
+void VulkanFire::init(VkQueue queue,VkCommandPool cpool, VkRenderPass renderpass,VkDescriptorPool pool,VkDescriptorBufferInfo* descriptor, VkSampler sampler,vkTools::VulkanTexture fire,vkTools::VulkanTexture smoke, std::string path){
     std::cout<< "dajge" << std::endl;
     prepareParticles(queue);
     prepareBurningPoints(queue);
     prepareUniformBuffers();
 std::cout<< "dajge1" << std::endl;
-    prepareComputeLayout(pool);
+    prepareComputeLayout(pool,descriptor);
     std::cout<< "dajge2" << std::endl;
     prepareComputePipelines(path);
 std::cout<< "dajge3" << std::endl;
@@ -445,7 +447,7 @@ void VulkanFire::prepareBurningPoints(VkQueue queue){
         &stagingBuffer.memory);
 
     exampleBase->createBuffer(
-        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         storageBufferSize,
         nullptr,
@@ -472,6 +474,11 @@ void VulkanFire::prepareBurningPoints(VkQueue queue){
     bPointsStorageBuffer.descriptor.range = storageBufferSize;
     bPointsStorageBuffer.descriptor.buffer = bPointsStorageBuffer.buffer;
     bPointsStorageBuffer.descriptor.offset = 0;
+
+
+
+
+
 
     /*
     // Binding description
@@ -529,7 +536,7 @@ void VulkanFire::prepareBurningPoints(VkQueue queue){
     */
 }
 
-void VulkanFire::prepareComputeLayout(VkDescriptorPool descriptorPool)
+void VulkanFire::prepareComputeLayout(VkDescriptorPool descriptorPool, VkDescriptorBufferInfo* descriptor)
 {
     // Create compute pipeline
     // Compute pipelines are created separate from graphics pipelines
@@ -596,8 +603,26 @@ void VulkanFire::prepareComputeLayout(VkDescriptorPool descriptorPool)
             2,
             &computeUniformBuffer.descriptor)
     };
-std::cout << "bob";
     vkUpdateDescriptorSets(device, computeWriteDescriptorSets.size(), computeWriteDescriptorSets.data(), 0, NULL);
+
+    VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &allocInfo, &moveBurnDescriptorSet));
+
+    computeWriteDescriptorSets =
+    {
+        vkTools::initializers::writeDescriptorSet(
+            moveBurnDescriptorSet,
+            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            1,
+            &bPointsStorageBuffer.descriptor),
+        // Binding 1 : Uniform buffer
+        vkTools::initializers::writeDescriptorSet(
+            moveBurnDescriptorSet,
+            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            0,
+            descriptor)
+    };
+    vkUpdateDescriptorSets(device, computeWriteDescriptorSets.size(), computeWriteDescriptorSets.data(), 0, NULL);
+
 }
 
 void VulkanFire::prepareComputePipelines(std::string assetPath){
@@ -623,6 +648,9 @@ void VulkanFire::prepareComputePipelines(std::string assetPath){
 
     computePipelineCreateInfo.stage = exampleBase->loadShader(assetPath + "shaders/particlefire/clickFire.comp.spv", VK_SHADER_STAGE_COMPUTE_BIT);
     VK_CHECK_RESULT(vkCreateComputePipelines(device, pipelineCache, 1, &computePipelineCreateInfo, nullptr, &clickFire));
+
+    computePipelineCreateInfo.stage = exampleBase->loadShader(assetPath + "shaders/particlefire/moveBurn.comp.spv", VK_SHADER_STAGE_COMPUTE_BIT);
+    VK_CHECK_RESULT(vkCreateComputePipelines(device, pipelineCache, 1, &computePipelineCreateInfo, nullptr, &moveBurnPipeline));
 }
 
 void VulkanFire::createClickCommand(VkCommandPool cmdPool){
@@ -637,9 +665,9 @@ void VulkanFire::createClickCommand(VkCommandPool cmdPool){
             VK_COMMAND_BUFFER_LEVEL_PRIMARY,
             1);
 
-    VkCommandBufferBeginInfo cmdBufInfo = vkTools::initializers::commandBufferBeginInfo();
-
     VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &clickCmd));
+
+    VkCommandBufferBeginInfo cmdBufInfo = vkTools::initializers::commandBufferBeginInfo();
 
     vkBeginCommandBuffer(clickCmd,&cmdBufInfo);
 
@@ -653,17 +681,37 @@ void VulkanFire::createClickCommand(VkCommandPool cmdPool){
     vkEndCommandBuffer(clickCmd);
 }
 
+void VulkanFire::buildMoveBurnCommand(VkCommandBuffer& cmd){
+    int bGroups  = 1;
+    while(bGroups*512<computeUbo.bPointsCount){
+        bGroups++;
+    }
+    VkCommandBufferBeginInfo cmdBufInfo = vkTools::initializers::commandBufferBeginInfo();
+
+    vkBeginCommandBuffer(cmd,&cmdBufInfo);
+
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, moveBurnPipeline);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, computePipelineLayout, 0, 1, &moveBurnDescriptorSet, 0, 0);
+
+    // Dispatch the compute job
+    std::cout<<"click"<<bGroups<<std::endl;
+    vkCmdDispatch(cmd, bGroups, 1, 1);
+
+    vkEndCommandBuffer(cmd);
+}
+
 void VulkanFire::cliked(VkQueue queue, glm::vec4 pos){
     computeUbo.clickPos = pos;
 
     memcpy(computeUniformBuffer.mapped, &computeUbo, sizeof(computeUbo));
 
-    VkSubmitInfo submitInfo;
+    VkSubmitInfo submitInfo = vkTools::initializers::submitInfo();
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &clickCmd;
 
     // Submit to queue
     std::cout<<"click"<<std::endl;
+    vkDeviceWaitIdle(device);
     vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
     std::cout<<"click2"<<std::endl;
 }
@@ -882,7 +930,6 @@ std::cout<<"bobo4" << std::endl;
 
 void VulkanFire::prepareUniformBuffers()
 {
-    ubo.model = glm::mat4();
     // Vertex shader uniform buffer block
     std::cout<< "alloc uniform" << std::endl;
 
@@ -929,4 +976,18 @@ void VulkanFire::addToWorld(btDiscreteDynamicsWorld* dw){
         dw->addRigidBody(particle.body);
         particle.body->setGravity(btVector3(0.0f,0.0f,0.0f));
     }*/
+}
+
+void VulkanFire::updateProjView(glm::mat4 projection, glm::mat4 view){
+    ubo.projection = projection;
+    ubo.view = view;
+    updateUniformBuffer();
+}
+
+void VulkanFire::updateUniformBuffer(){
+    uint8_t *pData;
+    VkResult err = vkMapMemory(device, uniformData.memory, 0, sizeof(ubo), 0, (void **)&pData);
+    assert(!err);
+    memcpy(pData, &ubo, sizeof(ubo));
+    vkUnmapMemory(device, uniformData.memory);
 }

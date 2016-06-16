@@ -10,19 +10,15 @@
 
 #include "VulkanCube.h"
 
-VulkanCube::VulkanCube(VkDevice device, VulkanExampleBase *example,glm::vec3 halfSize,glm::vec3 color, glm::vec3 startPos,float mass)
+VulkanCube::VulkanCube(VkDevice mdevice, VulkanExampleBase *mexample,glm::vec3 halfSize,glm::vec3 color, glm::vec3 startPos,float mass): VulkanObject(mdevice,mexample)
 {
-    this->device = device;
-    this->exampleBase = example;
     prepareVertices(halfSize,color);
     prepareRigidBody(halfSize, startPos, mass);
     prepareUniformBuffer(startPos);
 }
 
-VulkanCube::VulkanCube(VkDevice device, VulkanExampleBase *example,glm::vec3 halfSize,glm::vec3 color, glm::vec3 startPos,float mass,std::vector<glm::vec3>& points)
+VulkanCube::VulkanCube(VkDevice mdevice, VulkanExampleBase *mexample,glm::vec3 halfSize,glm::vec3 color, glm::vec3 startPos,float mass,std::vector<glm::vec3>& points) : VulkanObject(mdevice,mexample)
 {
-    this->device = device;
-    this->exampleBase = example;
     points = prepareVertices(halfSize,color);
     prepareRigidBody(halfSize, startPos, mass);
     prepareUniformBuffer(startPos);
@@ -30,10 +26,6 @@ VulkanCube::VulkanCube(VkDevice device, VulkanExampleBase *example,glm::vec3 hal
 
 VulkanCube::~VulkanCube()
 {
-	// Clean up vulkan resources
-	vkDestroyBuffer(device, uniformData.buffer, nullptr);
-	vkFreeMemory(device, uniformData.memory, nullptr);
-
 	vkDestroyBuffer(device, vertexBuffer.buf, nullptr);
 	vkFreeMemory(device, vertexBuffer.mem, nullptr);
 }
@@ -153,8 +145,10 @@ void VulkanCube::draw(VkCommandBuffer cmdbuffer, VkPipelineLayout pipelineLayout
     vkCmdDraw(cmdbuffer, 36, 1, 0, 0);
 }
 
-void VulkanCube::setupDescriptorSet(VkDescriptorPool pool, VkDescriptorSetLayout descriptorSetLayout)
+void VulkanCube::setupDescriptorSet(VkDescriptorPool pool, VkDescriptorSetLayout descriptorSetLayout, uint32_t offSet, uint8_t* pdata)
 {
+    offset = offSet;
+    this->pBurn = pdata;
 	VkDescriptorSetAllocateInfo allocInfo =
 		vkTools::initializers::descriptorSetAllocateInfo(
 			pool,
@@ -163,14 +157,14 @@ void VulkanCube::setupDescriptorSet(VkDescriptorPool pool, VkDescriptorSetLayout
 
 	VkResult vkRes = vkAllocateDescriptorSets(device, &allocInfo, &descriptorSet);
 	assert(!vkRes);
-
+std::cout<<"bumbo"<<std::endl;
 	// Binding 0 : Vertex shader uniform buffer
 	VkWriteDescriptorSet writeDescriptorSet =
 		vkTools::initializers::writeDescriptorSet(
 			descriptorSet,
 			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 			0,
-			&uniformData.descriptor);
+            &uniformData.descriptor);
 
 	vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, NULL);
 }
@@ -182,29 +176,13 @@ void VulkanCube::prepareUniformBuffer(glm::vec3 pos)
     ubo.model = glm::translate(ubo.model,pos);
 
 	VkResult err;
-
-	// Vertex shader uniform buffer block
-	VkMemoryAllocateInfo allocInfo = vkTools::initializers::memoryAllocateInfo();
-	VkMemoryRequirements memReqs;
-
-	VkBufferCreateInfo bufferInfo = vkTools::initializers::bufferCreateInfo(
-		VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-		sizeof(ubo));
-
-	err = vkCreateBuffer(device, &bufferInfo, nullptr, &uniformData.buffer);
-	assert(!err);
-	vkGetBufferMemoryRequirements(device, uniformData.buffer, &memReqs);
-	allocInfo.allocationSize = memReqs.size;
-	exampleBase->getMemoryType(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, &allocInfo.memoryTypeIndex);
-	err = vkAllocateMemory(device, &allocInfo, nullptr, &uniformData.memory);
-	assert(!err);
-	err = vkBindBufferMemory(device, uniformData.buffer, uniformData.memory, 0);
-	assert(!err);
-
-	uniformData.descriptor.buffer = uniformData.buffer;
-	uniformData.descriptor.offset = 0;
-	uniformData.descriptor.range = sizeof(ubo);
-	uniformData.allocSize = allocInfo.allocationSize;
+    exampleBase->createBuffer(
+        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        sizeof(ubo),
+        &ubo,
+        &uniformData.buffer,
+        &uniformData.memory,
+        &uniformData.descriptor);
 }
 
 btRigidBody* VulkanCube::getRigidBody(){

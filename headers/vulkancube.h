@@ -22,7 +22,6 @@
 #include "vulkanObject.h"
 #include "vkObjectMotionState.h"
 
-#include "vulkanexamplebase.h"
 #include "btBulletDynamicsCommon.h"
 
 struct Vertex
@@ -45,7 +44,6 @@ private:
 	};
 
     // Reference to example for getting memory types
-    VulkanExampleBase *exampleBase;
 
 	struct
 	{
@@ -63,9 +61,9 @@ public:
 
 	void draw(VkCommandBuffer cmdbuffer, VkPipelineLayout pipelineLayout);
 
-	void setupDescriptorSet(VkDescriptorPool pool, VkDescriptorSetLayout descriptorSetLayout);
+    void setupDescriptorSet(VkDescriptorPool pool, VkDescriptorSetLayout descriptorSetLayout, uint32_t offSet, uint8_t *pData);
     VulkanCube(VkDevice device, VulkanExampleBase *example,glm::vec3 halfSize,glm::vec3 color, glm::vec3 startPos,float mass);
-    VulkanCube(VkDevice device, VulkanExampleBase *example,glm::vec3 halfSize,glm::vec3 color, glm::vec3 startPos,float mass,std::vector<glm::vec3>&);
+    VulkanCube(VkDevice mdevice, VulkanExampleBase *mexample, glm::vec3 halfSize, glm::vec3 color, glm::vec3 startPos, float mass, std::vector<glm::vec3>&);
     ~VulkanCube();
 
     btRigidBody* getRigidBody();
