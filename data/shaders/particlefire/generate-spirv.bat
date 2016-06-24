@@ -6,3 +6,5 @@ glslangvalidator -V clickFire.comp -o clickFire.comp.spv
 glslangvalidator -V propageFire.comp -o propageFire.comp.spv
 glslangvalidator -V updateParticle.comp -o updateParticle.comp.spv
 glslangvalidator -V moveBurn.comp -o moveBurn.comp.spv
+glslangvalidator -V particleCollision.comp -o particleCollision.comp.spv
+glslangvalidator -V fillGrid.comp -o fillGrid.comp.spv

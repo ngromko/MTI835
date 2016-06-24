@@ -49,9 +49,11 @@ struct Particle {
 struct BurningPoint{
     glm::vec4 pos;
     glm::vec4 basePos;
+    glm::vec4 normal;
+    glm::vec4 baseNorm;
     uint32_t neighboors[10];
     uint32_t nCount;
-    uint32_t state;
+    float heat;
 };
 
 class VulkanFire
@@ -71,6 +73,8 @@ private:
     VkPipeline updateParticles;
     VkPipeline clickFire;
     VkPipeline moveBurnPipeline;
+    VkPipeline collisionPipeline;
+    VkPipeline fillGridPipeline;
 
     VkQueue computeQueue;
     VkCommandBuffer clickCmd;
@@ -94,17 +98,15 @@ private:
     Attributes attributesBPoints;
 
     struct {
-        //float deltaT;
-        glm::vec4 delta;
         glm::vec4 clickPos;
+        float deltaT;
         int32_t particleCount;
         int32_t bPointsCount;
-        int32_t bPointsCount4;
     } computeUbo;
 
     vkTools::UniformData bPointsStorageBuffer;
     vkTools::UniformData particlesStorageBuffer;
-    vkTools::UniformData modelsStorageBuffer;
+    vkTools::UniformData gridStorageBuffer;
     vkTools::UniformData computeUniformBuffer;
 
     std::vector<BurningPoint> burningPoints;
@@ -129,13 +131,15 @@ private:
     void createClickCommand(VkCommandPool cmdPool);
     void updateUniformBuffer();
 
+    void prepareGrid();
+    void fillGrid(VkQueue queue, VkCommandPool cmdPool);
 public:
     void draw(VkCommandBuffer cmdbuffer);
     void compute(VkCommandBuffer cmdbuffer);
     void updateTime(float frameTimer);
     void init(VkQueue queue,VkCommandPool cpool, VkRenderPass renderpass,VkDescriptorPool pool,VkDescriptorBufferInfo*,VkSampler sampler,vkTools::VulkanTexture fire,vkTools::VulkanTexture smoke, std::string path);
     void cliked(VkQueue queue, glm::vec4 pos);
-    void addBurningPoints(std::vector<glm::vec3> data, uint32_t objectNumber);
+    uint32_t addBurningPoints(std::vector<glm::vec3> data, uint32_t objectNumber);
     void updateProjView(glm::mat4 projection, glm::mat4 view);
     void VulkanFire::buildMoveBurnCommand(VkCommandBuffer& cmd);
 

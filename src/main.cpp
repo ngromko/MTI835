@@ -37,6 +37,8 @@ private:
 	vkTools::VulkanTexture textureColorMap;
     std::chrono::time_point<std::chrono::high_resolution_clock> tStart;
     btRigidBody* selectBody;
+    std::vector<uint32_t> objectData;
+
     float time = 0;
 
 public:
@@ -264,20 +266,35 @@ public:
 
 	void prepareVertices()
 	{
+        objectData.push_back(0);
         fire=new VulkanFire(device,this);
 
         std::vector<glm::vec3> allo;
-        cubes.push_back(new VulkanCube(device,this,glm::vec3(10.0,0.1,10.0),glm::vec3(0.1,0.1,0.1),glm::vec3(0,-0.6,0),0));
+        //cubes.push_back(new VulkanCube(device,this,glm::vec3(10.0,0.1,10.0),glm::vec3(0.1,0.1,0.1),glm::vec3(5,-0.1,5),0));
+        /*int objnumber=0;
+        for(int i = 0;i<5;i++){
+            for(int j = 0;j<5;j++){
+                for(int k = 1;k<3;k++){
+                    burningCubes.push_back(new VulkanCube(device,this,glm::vec3(0.5f,0.5f,0.5f),glm::vec3(1,0,0),glm::vec3(0.5+i*2,0.5+k*2,0.5+j*2),0,allo));
 
-        burningCubes.push_back(new VulkanCube(device,this,glm::vec3(1.0f,0.5f,1.0f),glm::vec3(1,0,0),glm::vec3(-1.5,2,0.5),1,allo));
+                    objectData.push_back(fire->addBurningPoints(allo,objnumber++));
+                }
+            }
+        }*/
 
-        fire->addBurningPoints(allo,0);
+        burningCubes.push_back(new VulkanCube(device,this,glm::vec3(1.0f,1.5f,1.0f),glm::vec3(1,0,0),glm::vec3(6.5,1.5f,5),0,allo));
 
-        burningCubes.push_back(new VulkanCube(device,this,glm::vec3(0.5,0.5,0.5),glm::vec3(0,0,1),glm::vec3(0.5,2,0.5),1,allo));
+        objectData.push_back(fire->addBurningPoints(allo,0));
 
-        std::cout <<" afaegag "<< allo.size() << std::endl;
+        burningCubes.push_back(new VulkanCube(device,this,glm::vec3(0.5,0.5,0.5),glm::vec3(0,0,1),glm::vec3(5,0.5f,5),0,allo));
 
-        fire->addBurningPoints(allo,1);
+        objectData.push_back(fire->addBurningPoints(allo,1));
+
+        burningCubes.push_back(new VulkanCube(device,this,glm::vec3(0.5,0.5,0.5),glm::vec3(0,0,1),glm::vec3(6.5,4.5f,5),0,allo));
+
+        objectData.push_back(fire->addBurningPoints(allo,2));
+
+        std::cout <<" errrrre "<< allo.size() << std::endl;
 
 		// Binding description
 		vertices.bindingDescriptions.resize(1);
@@ -331,16 +348,16 @@ public:
 		// Example uses one ubo and one combined image sampler 
 		std::vector<VkDescriptorPoolSize> poolSizes =
 		{
-            vkTools::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 20),
+            vkTools::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 60),
             vkTools::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 10),
-            vkTools::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 10),
+            vkTools::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 100),
 		};
 
 		VkDescriptorPoolCreateInfo descriptorPoolInfo =
 			vkTools::initializers::descriptorPoolCreateInfo(
 				poolSizes.size(),
 				poolSizes.data(),
-                10);
+                100);
 
 		VkResult vkRes = vkCreateDescriptorPool(device, &descriptorPoolInfo, nullptr, &descriptorPool);
 		assert(!vkRes);
@@ -386,8 +403,11 @@ public:
 
     void setupDescriptorSets()
     {
+        std::cout<<"enter"<<std::endl;
 
         VkDeviceSize  size = 16*4*burningCubes.size();
+
+        std::cout<<size<<std::endl;
         createBuffer(
             VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
@@ -403,13 +423,14 @@ public:
 
         VkResult err = vkMapMemory(device, objectsUniforme.memory, 0, size, 0, (void **)&pData);
         assert(!err);
-
+        std::cout<<"test"<<std::endl;
         for (auto& cube : cubes)
         {
             cube->setupDescriptorSet(descriptorPool, descriptorSetLayout,offset ,pData);
         }
         for (auto& cube : burningCubes)
         {
+            std::cout<<"test"<<std::endl;
             cube->setupDescriptorSet(descriptorPool, descriptorSetLayout,offset ,pData);
             offset+=16*4;
         }
@@ -431,6 +452,20 @@ public:
             cube->setupBurnCommand(queue,moveBurnCmd);
         }
 
+        glm::mat4 model4 = glm::mat4();
+
+        model4 = glm::translate(model4,glm::vec3(6.5,4.5f,5));
+        //view = glm::rotate(view, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
+        model4 = glm::rotate(model4,glm::radians(45.0f),glm::vec3(1,0,0));
+        model4 = glm::rotate(model4,glm::radians(45.0f),glm::vec3(0,1,0));
+
+        burningCubes[2]->updateModel(model4);
+
+
+        btMatrix3x3 bob;
+        btQuaternion nob = btQuaternion(btVector3(1,0,0),glm::radians(45.0f));
+        nob += btQuaternion(btVector3(0,1,0),glm::radians(45.0f));
+        burningCubes[2]->getRigidBody()->getWorldTransform().setRotation(nob);
 
     }
 
@@ -520,10 +555,13 @@ public:
         glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, -zoom),glm::vec3(0,0,0),glm::vec3(0,1,0));
         //view = glm::lookAtLH(glm::vec3(0.0f, 0.0f, zoom),glm::vec3(0,0,0),glm::vec3(0,-1,0));
         view = glm::scale(view,glm::vec3(1,-1,1));
+
         //uboVS.modelMatrix = glm::mat4();
         view = glm::rotate(view, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
         view = glm::rotate(view, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
         view = glm::rotate(view, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+
+        view = glm::translate(view,glm::vec3(-5.0f,0.0f,-5.0f));
         for (auto& cube : cubes)
         {
             cube->updateProjView(proj,view);
@@ -538,16 +576,16 @@ public:
 	void prepare()
 	{
 		VulkanExampleBase::prepare();
-		loadTextures();
-		prepareVertices();
-		setupDescriptorSetLayout();
-        preparePipelinesCubes();
-		setupDescriptorPool();
-        setupDescriptorSets();
-		buildCommandBuffers();
-        buildBulletScene();
+        loadTextures();std::cout<<"bumbo"<<std::endl;
+        prepareVertices();std::cout<<"bumbo1"<<std::endl;
+        setupDescriptorSetLayout();std::cout<<"bumbo2"<<std::endl;
+        preparePipelinesCubes();std::cout<<"bumbo3"<<std::endl;
+        setupDescriptorPool();std::cout<<"bumbo4"<<std::endl;
+        setupDescriptorSets();std::cout<<"bumbo5"<<std::endl;
+        buildCommandBuffers();std::cout<<"bumbo6"<<std::endl;
+        buildBulletScene();std::cout<<"bumbo7"<<std::endl;
 
-        updateUniformBuffers();
+        updateUniformBuffers();std::cout<<"bumbo8"<<std::endl;
 		prepared = true;
 	}
 
@@ -596,6 +634,7 @@ public:
         view = glm::rotate(view, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
         view = glm::rotate(view, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
 
+        view = glm::translate(view,glm::vec3(-5.0f,0.0f,-5.0f));
 
         // Faster way (just one inverse)
         glm::mat4 M = glm::inverse(proj * view);

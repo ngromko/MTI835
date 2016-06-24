@@ -7,14 +7,16 @@ struct BurningPoint
 {
     vec4 pos;
     vec4 basePos;
+    vec4 normal;
+    vec4 baseNorm;
     uvec4 bob;
     uvec4 bobb;
     uvec4 bobb3;
 };
 
-struct UBO
+layout (binding = 2) buffer UBOT
 {
-    mat4 model;
+    mat4 ubos[];
 };
 
 // Binding 1 : Position storage buffer
@@ -23,21 +25,39 @@ layout(std140, binding = 1) buffer Burn
    BurningPoint bPoints[ ];
 };
 
-layout (local_size_x = 512) in;
-
-layout (binding = 0) buffer UBOT
+layout (binding = 3) buffer GRID
 {
-    UBO ubos[];
+    uint cells[];
 };
+
+layout (binding = 4) uniform UBO
+{
+        //vec4 delta;
+        vec4 click;
+        float deltaT;
+        int pCount;
+        int bCount;
+        //int fill;
+} ubo;
+
+layout (local_size_x = 512) in;
 
 void main() 
 {
     // Current SSBO index
     uint index = gl_GlobalInvocationID.x;
         // Don't try to write beyond bPoint count
-    if (index >= bPoints.length())
+    if (index >= ubo.bCount)
         return;
     uint uboIndex = bPoints[index].bobb3.z>>16;
-    bPoints[index].pos =  ubos[uboIndex].model*bPoints[index].basePos;
+    uvec4 gIndex = uvec4(bPoints[index].pos*20);
+    uint cindex =  gIndex.y * 40000 + gIndex.z*200 + gIndex.x;
+    cells[cindex]=8000000;
+    bPoints[index].pos =  ubos[uboIndex]*bPoints[index].basePos;
+    bPoints[index].normal =  ubos[uboIndex]*bPoints[index].baseNorm;
+    
+    gIndex = uvec4(bPoints[index].pos*20);
+    cindex =  gIndex.y * 40000 + gIndex.z*200 + gIndex.x;
+    cells[cindex]=index;
 }
 

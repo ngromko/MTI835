@@ -19,9 +19,11 @@ struct BurningPoint
 {
     vec4 pos;
     vec4 basePos;
+    vec4 normal;
+    vec4 baseNorm;
     uint neighs[10];
     uint nCount;
-    uint state;
+    float heat;
 };
 layout(std430, binding = 0) buffer Bumbo
 {
@@ -33,17 +35,17 @@ layout(std430,binding = 1) buffer Burning
    BurningPoint bPoints[];
 };
 
-layout (local_size_x = 512) in;
-
-layout (binding = 2) uniform UBO
+layout (binding = 4) uniform UBO
 {
-        //float deltaT;
-        vec4 delta;
+        //vec4 delta;
         vec4 click;
+        float deltaT;
         int pCount;
         int bCount;
-        int bCount3;
+        //int fill;
 } ubo;
+
+layout (local_size_x = 512) in;
 
 void main() 
 {
@@ -51,25 +53,24 @@ void main()
     uint index = gl_GlobalInvocationID.x;
 	// Don't try to write beyond particle count
         // Faire rien si le point ne brule pas
-    if (index >= ubo.bCount /*&& bPoints[index].state!=1*/)
+    if (index >= ubo.bCount)
 		return;	
     BurningPoint me = bPoints[index];
     
     uint ncount = me.nCount&15;
 
-    //uint pIndex =  me.state;
-    if(me.state>=1000){
+    if(me.heat>=75.0f){
         for(int i=0;i<ncount;i++){
-            if(bPoints[me.neighs[i]].state<=1000){
-                bPoints[me.neighs[i]].state++;
+            if(bPoints[me.neighs[i]].heat<=75.0f){
+                bPoints[me.neighs[i]].heat+=0.02f+sign(bPoints[me.neighs[i]].pos.y - me.pos.y)*0.01f;
             }
         }
-        me.state++;
-        if(me.state>=3100.0f){
+        me.heat+=ubo.deltaT;
+        if(me.heat>75.5f){
             particles[index].pos=bPoints[index].pos;
-            me.state=1001;
+            me.heat=75.0f;
         }
-        bPoints[index].state=me.state;
+        bPoints[index].heat=me.heat;
     }
     
     /*

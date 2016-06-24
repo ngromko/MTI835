@@ -33,56 +33,60 @@ VulkanCube::~VulkanCube()
 std::vector<glm::vec3> VulkanCube::prepareVertices(glm::vec3 halfSize,glm::vec3 color){
 
     // Setup vertices
-
+    glm::vec3 point;
     std::vector<Vertex> vBuffer;
 
-        // -Y
-        Vertex v = { { halfSize.x,-halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 }, { 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
-         v = { { -halfSize.x,-halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
-         v = { { halfSize.x,-halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 1.0, 0.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
-         v = { { halfSize.x,-halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
-         v = { { -halfSize.x,-halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 0.0, 1.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
-         v = { { -halfSize.x,-halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
-        // +Y
-         v = { { halfSize.x,halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 },{ 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
-         v = { { halfSize.x,halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 1.0, 0.0 },{ 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
-         v = { { -halfSize.x,halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
-         v = { { halfSize.x,halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 },{ 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
-         v = { { -halfSize.x,halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
-         v = { { -halfSize.x,halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 0.0, 1.0 },{ 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
-        // -X
-         v = { { -halfSize.x,-halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
-         v = { { -halfSize.x,-halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 0.0, 1.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
-         v = { { -halfSize.x,halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
-         v = { { -halfSize.x,-halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
-         v = { { -halfSize.x,halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
-         v = { { -halfSize.x,halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 1.0, 0.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
-        // +X
-         v = { { halfSize.x,halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
-         v = { { halfSize.x,-halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
-         v = { { halfSize.x,halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 1.0, 0.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
-         v = { { halfSize.x,-halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
-         v = { { halfSize.x,halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
-         v = { { halfSize.x,-halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 0.0, 1.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
-        // -Z
-         v = { { halfSize.x,halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
-         v = { { -halfSize.x,-halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
-         v = { { -halfSize.x,halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 1.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
-         v = { { halfSize.x,halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
-         v = { { halfSize.x,-halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 1.0, 0.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
-         v = { { -halfSize.x,-halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
-        // +Z
-         v = { { -halfSize.x,halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 0.0, 1.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
-         v = { { -halfSize.x,-halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
-         v = { { halfSize.x,-halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 0.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
-         v = { { halfSize.x,halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
-         v = { { -halfSize.x,halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 0.0, 1.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
-         v = { { halfSize.x,-halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 0.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
+    // -Y
+    Vertex v = { { halfSize.x,-halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 }, { 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,-halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { halfSize.x,-halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 1.0, 0.0 },{ 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { halfSize.x,-halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 },{ 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,-halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 0.0, 1.0 },{ 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,-halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
+    // +Y
+     v = { { halfSize.x,halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { halfSize.x,halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 1.0, 0.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { halfSize.x,halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 0.0, 1.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
+    // -X
+     v = { { -halfSize.x,-halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,-halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 0.0, 1.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,-halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 1.0, 0.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+    // +X
+     v = { { halfSize.x,halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { halfSize.x,-halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { halfSize.x,halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 1.0, 0.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { halfSize.x,-halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { halfSize.x,halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { halfSize.x,-halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 0.0, 1.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+    // -Z
+     v = { { halfSize.x,halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,-halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 1.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
+     v = { { halfSize.x,halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
+     v = { { halfSize.x,-halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 1.0, 0.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,-halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
+    // +Z
+     v = { { -halfSize.x,halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 0.0, 1.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,-halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
+     v = { { halfSize.x,-halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 0.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
+     v = { { halfSize.x,halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 0.0, 1.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
+     v = { { halfSize.x,-halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 0.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
 
+    float scalex = (halfSize.x-0.025)/halfSize.x;
+    float scaley = (halfSize.y-0.025)/halfSize.y;
+    float scalez = (halfSize.z-0.025)/halfSize.z;
     std::vector<glm::vec3> result;
     for(int i=0;i<12;i++){
         for(int j=0;j<3;j++){
-            result.push_back(glm::vec3(vBuffer.at(3*i+j).pos[0],vBuffer.at(3*i+j).pos[1],vBuffer.at(3*i+j).pos[2]));
+            point = glm::vec3(vBuffer.at(3*i+j).pos[0]*scalex,vBuffer.at(3*i+j).pos[1]*scaley,vBuffer.at(3*i+j).pos[2]*scalez);
+            result.push_back(point);
         }
         result.push_back(glm::vec3(vBuffer.at(3*i).normal[0],vBuffer.at(3*i).normal[1],vBuffer.at(3*i).normal[2]));
     }
@@ -133,7 +137,7 @@ groundTransform.setBasis(bob);*/
     }
 
     btRigidBody::btRigidBodyConstructionInfo rbInfo(mass,myMotionState,groundShape,localInertia);
-    rbody = new btRigidBody(rbInfo,mass>0);
+    rbody = new btRigidBody(rbInfo,true);
 }
 
 
@@ -157,7 +161,7 @@ void VulkanCube::setupDescriptorSet(VkDescriptorPool pool, VkDescriptorSetLayout
 
 	VkResult vkRes = vkAllocateDescriptorSets(device, &allocInfo, &descriptorSet);
 	assert(!vkRes);
-std::cout<<"bumbo"<<std::endl;
+
 	// Binding 0 : Vertex shader uniform buffer
 	VkWriteDescriptorSet writeDescriptorSet =
 		vkTools::initializers::writeDescriptorSet(

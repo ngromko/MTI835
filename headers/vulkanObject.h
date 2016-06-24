@@ -47,6 +47,7 @@ public:
 
         queue = mainqueue;
         moveBurnPoints=cmd;
+        updateModel(ubo.model);
     }
 
     void updateProjView(glm::mat4 projection, glm::mat4 view){

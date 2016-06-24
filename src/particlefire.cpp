@@ -60,7 +60,11 @@ void VulkanFire::compute(VkCommandBuffer cmdbuffer)
     vkCmdDispatch(cmdbuffer, bGroups, 1, 1);
 
     vkCmdBindPipeline(cmdbuffer, VK_PIPELINE_BIND_POINT_COMPUTE, updateParticles);
-    vkCmdBindDescriptorSets(cmdbuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computePipelineLayout, 0, 1, &computeDescriptorSet, 0, 0);
+
+    // Dispatch the compute job
+    vkCmdDispatch(cmdbuffer, pGroups, 1, 1);
+
+    vkCmdBindPipeline(cmdbuffer, VK_PIPELINE_BIND_POINT_COMPUTE, collisionPipeline);
 
     // Dispatch the compute job
     vkCmdDispatch(cmdbuffer, pGroups, 1, 1);
@@ -97,44 +101,50 @@ void VulkanFire::draw(VkCommandBuffer cmdbuffer)
     vkCmdDraw(cmdbuffer, computeUbo.particleCount, 1, 0, 0);
 }
 
-void VulkanFire::addBurningPoints(std::vector<glm::vec3> data, uint32_t objectNumber){
+uint32_t VulkanFire::addBurningPoints(std::vector<glm::vec3> data, uint32_t objectNumber){
 
     int size = data.size();
-    std::cout<<size<<std::endl;
+    int normalSize=0;
     std::vector<glm::vec3> allPoints;
     BurningPoint bp;
+    uint32_t bSize = burningPoints.size();
     for(int i=0;i<size;i+=4){
-
+        normalSize = allPoints.size();
         triangulate(data,i,allPoints);
+        for(int j=normalSize;j<allPoints.size();j++){
+            bp.pos[0] = bp.basePos[0] = allPoints[j].x;
+            bp.pos[1] = bp.basePos[1] = allPoints[j].y;
+            bp.pos[2] = bp.basePos[2] = allPoints[j].z;
+            bp.pos[3] = 0.0f;
+            bp.baseNorm = glm::vec4(data[i+3],0.0f);
+            bp.basePos[3]=1.0f;
+            bp.nCount = 0;
+            bp.heat = 0.0f;
+            burningPoints.push_back(bp);
+        }
     }
 
-    uint32_t bSize = burningPoints.size();
-    for(int i=0;i<allPoints.size();i++){
-        bp.pos[0] = bp.basePos[0] = allPoints[i].x;
-        bp.pos[1] = bp.basePos[1] = allPoints[i].y;
-        bp.pos[2] = bp.basePos[2] = allPoints[i].z;
-        bp.basePos[3]=1.0f;
-        bp.nCount = 0;
-        bp.state = 0;
-        for(int j=0;j<allPoints.size();j++){
+
+    for(int i=bSize;i<burningPoints.size();i++){
+        for(int j=bSize;j<burningPoints.size();j++){
             if(i!=j){
-                glm::vec3 diff = allPoints[j] - allPoints[i];
+                glm::vec3 diff(burningPoints[j].pos - burningPoints[i].pos);
                 float d = glm::dot(diff,diff);
                 if(d<0.0121){
-                    bp.neighboors[bp.nCount]=j+bSize;
-                    bp.nCount++;
+                    burningPoints[i].neighboors[burningPoints[i].nCount]=j;
+                    burningPoints[i].nCount++;
                 }
-                if(bp.nCount==10){
+                if(burningPoints[i].nCount==10){
                     break;
                 }
             }
         }
-        bp.nCount+=objectNumber<<16;
-        burningPoints.push_back(bp);
+        burningPoints[i].nCount+=objectNumber<<16;
     }
     //burningPoints[0].state=10000;
-    std::cout<<"bpointsize "<<burningPoints.size()<<std::endl;
-    computeUbo.bPointsCount = burningPoints.size();std::cout<<"bpointsizce "<<computeUbo.bPointsCount<<std::endl;
+
+    computeUbo.bPointsCount = burningPoints.size();
+    return burningPoints.size()-bSize;
 }
 void VulkanFire::triangulate(std::vector<glm::vec3> data,int i,std::vector<glm::vec3>& allPoints){
     Fade_2D dt;
@@ -180,21 +190,17 @@ void VulkanFire::triangulate(std::vector<glm::vec3> data,int i,std::vector<glm::
     dt.refine(pZone,27,0.01,0.1,true);
 
     pZone->getTriangles(vTriangles2);
-
     vPoints.clear();
 
     dt.getVertexPointers(vPPoints);
-
     for(int i=0;i<vPPoints.size();i++){
         u = mat*glm::vec3(vPPoints[i]->x(),vPPoints[i]->y(),z);
-        if(u.x < -1 || u.y< -1 || u.z<-1){
+        /*if(u.x < -1 || u.y< -1 || u.z<-1){
             std::cout << "point bizartre " << u.x << " " << u.y << " " << u.z << std::endl;
-        }
+        }*/
         allPoints.push_back(u);
     }
-
     dt.deleteZone(pZone);
-
     vSegments1.clear();
     vCG.clear();
 }
@@ -203,6 +209,7 @@ void VulkanFire::init(VkQueue queue,VkCommandPool cpool, VkRenderPass renderpass
     std::cout<< "dajge" << std::endl;
     prepareParticles(queue);
     prepareBurningPoints(queue);
+    prepareGrid();
     prepareUniformBuffers();
 std::cout<< "dajge1" << std::endl;
     prepareComputeLayout(pool,descriptor);
@@ -212,6 +219,7 @@ std::cout<< "dajge3" << std::endl;
     setupDescriptorSet(pool,sampler,fire,smoke);
     prepareRenderPipelines(renderpass,path);
     createClickCommand(cpool);
+    fillGrid(queue,cpool);
 }
 
 float VulkanFire::rnd(float range)
@@ -292,9 +300,9 @@ void VulkanFire::prepareParticles(VkQueue queue)
     float step=3.0f;
     for (auto& particle : particleBuffer)
     {
-        particle.pos[0]=-90+row*step;
-        particle.pos[1]=-10;
-        particle.pos[2]=-90+col*step;
+        particle.pos[0]=5;
+        particle.pos[1]=7;
+        particle.pos[2]=5;
         particle.alpha = 0.75f;//rnd(0.75f);
         particle.size = 0.05f + rnd(0.025f);
         particle.color = glm::vec4(1.0f);
@@ -474,66 +482,22 @@ void VulkanFire::prepareBurningPoints(VkQueue queue){
     bPointsStorageBuffer.descriptor.range = storageBufferSize;
     bPointsStorageBuffer.descriptor.buffer = bPointsStorageBuffer.buffer;
     bPointsStorageBuffer.descriptor.offset = 0;
+}
+
+void VulkanFire::prepareGrid(){
 
 
+    exampleBase->createBuffer(
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        200*200*200*4,
+        nullptr,
+        &gridStorageBuffer.buffer,
+        &gridStorageBuffer.memory);
 
-
-
-
-    /*
-    // Binding description
-    attributesBPoints.bindingDescriptions.resize(1);
-    attributesBPoints.bindingDescriptions[0] =
-        vkTools::initializers::vertexInputBindingDescription(
-            VERTEX_BUFFER_BIND_ID,
-            sizeof(BurningPoint),
-            VK_VERTEX_INPUT_RATE_VERTEX);
-
-    // Attribute descriptions
-    // Describes memory layout and shader positions
-    // Location 0 : Position
-    attributesBPoints.attributeDescriptions.push_back(
-        vkTools::initializers::vertexInputAttributeDescription(
-            VERTEX_BUFFER_BIND_ID,
-            0,
-            VK_FORMAT_R32G32B32_SFLOAT,
-            0));
-    // Location 1 : Voisins 1à3
-    attributesBPoints.attributeDescriptions.push_back(
-        vkTools::initializers::vertexInputAttributeDescription(
-            VERTEX_BUFFER_BIND_ID,
-            1,
-            VK_FORMAT_R32G32B32_UINT,
-            sizeof(float) * 3));
-    // Location 2 : Voisins 4 à 6
-    attributesBPoints.attributeDescriptions.push_back(
-        vkTools::initializers::vertexInputAttributeDescription(
-            VERTEX_BUFFER_BIND_ID,
-            2,
-            VK_FORMAT_R32G32B32_UINT,
-            sizeof(unsigned int) * 3+sizeof(float) * 3));
-    // Location 3 : nCount
-    attributesBPoints.attributeDescriptions.push_back(
-        vkTools::initializers::vertexInputAttributeDescription(
-            VERTEX_BUFFER_BIND_ID,
-            3,
-            VK_FORMAT_R32_UINT,
-            sizeof(unsigned int) * 6+sizeof(float) * 3));
-    // Location 4 : state
-    attributesBPoints.attributeDescriptions.push_back(
-        vkTools::initializers::vertexInputAttributeDescription(
-            VERTEX_BUFFER_BIND_ID,
-            4,
-            VK_FORMAT_R16_UINT,
-            sizeof(unsigned int) * 7+sizeof(float) * 3));
-
-    // Assign to vertex buffer
-    attributesBPoints.inputState = vkTools::initializers::pipelineVertexInputStateCreateInfo();
-    attributesBPoints.inputState.vertexBindingDescriptionCount = attributesBPoints.bindingDescriptions.size();
-    attributesBPoints.inputState.pVertexBindingDescriptions = attributesBPoints.bindingDescriptions.data();
-    attributesBPoints.inputState.vertexAttributeDescriptionCount = attributesBPoints.attributeDescriptions.size();
-    attributesBPoints.inputState.pVertexAttributeDescriptions = attributesBPoints.attributeDescriptions.data();
-    */
+    gridStorageBuffer.descriptor.range = 200*200*200*4;
+    gridStorageBuffer.descriptor.buffer = gridStorageBuffer.buffer;
+    gridStorageBuffer.descriptor.offset = 0;
 }
 
 void VulkanFire::prepareComputeLayout(VkDescriptorPool descriptorPool, VkDescriptorBufferInfo* descriptor)
@@ -543,20 +507,31 @@ void VulkanFire::prepareComputeLayout(VkDescriptorPool descriptorPool, VkDescrip
     // even if they use the same queue
 
     std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
-        // Binding 0 : Particle position storage buffer
+        // Binding 0 : Particle storage buffer
         vkTools::initializers::descriptorSetLayoutBinding(
             VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
             VK_SHADER_STAGE_COMPUTE_BIT,
             0),
+        // Binding 1 : Burning points storage buffer
         vkTools::initializers::descriptorSetLayoutBinding(
             VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
             VK_SHADER_STAGE_COMPUTE_BIT,
             1),
-        // Binding 1 : Uniform buffer
+        // Binding 2 : Object models matrix storage buffer
+        vkTools::initializers::descriptorSetLayoutBinding(
+            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            VK_SHADER_STAGE_COMPUTE_BIT,
+            2),
+        // Binding 3 : Collision grid storage buffer
+        vkTools::initializers::descriptorSetLayoutBinding(
+            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            VK_SHADER_STAGE_COMPUTE_BIT,
+            3),
+        // Binding 4 : Uniform buffer
         vkTools::initializers::descriptorSetLayoutBinding(
             VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             VK_SHADER_STAGE_COMPUTE_BIT,
-            2),
+            4)
     };
 
     VkDescriptorSetLayoutCreateInfo descriptorLayout =
@@ -590,39 +565,32 @@ void VulkanFire::prepareComputeLayout(VkDescriptorPool descriptorPool, VkDescrip
             VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
             0,
             &particlesStorageBuffer.descriptor),
-        // Binding 0 : burning points storage buffer
+        // Binding 1 : Burning points storage buffer
         vkTools::initializers::writeDescriptorSet(
             computeDescriptorSet,
             VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
             1,
             &bPointsStorageBuffer.descriptor),
-        // Binding 1 : Uniform buffer
+        // Binding 2 : Object models matrix storage buffer
+        vkTools::initializers::writeDescriptorSet(
+            computeDescriptorSet,
+            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            2,
+            descriptor),
+        // Binding 3 : Collision grid storage buffer
+        vkTools::initializers::writeDescriptorSet(
+            computeDescriptorSet,
+            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            3,
+            &gridStorageBuffer.descriptor),
+        // Binding 4 : Uniform buffer
         vkTools::initializers::writeDescriptorSet(
             computeDescriptorSet,
             VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            2,
+            4,
             &computeUniformBuffer.descriptor)
     };
     vkUpdateDescriptorSets(device, computeWriteDescriptorSets.size(), computeWriteDescriptorSets.data(), 0, NULL);
-
-    VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &allocInfo, &moveBurnDescriptorSet));
-
-    computeWriteDescriptorSets =
-    {
-        vkTools::initializers::writeDescriptorSet(
-            moveBurnDescriptorSet,
-            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            1,
-            &bPointsStorageBuffer.descriptor),
-        // Binding 1 : Uniform buffer
-        vkTools::initializers::writeDescriptorSet(
-            moveBurnDescriptorSet,
-            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            0,
-            descriptor)
-    };
-    vkUpdateDescriptorSets(device, computeWriteDescriptorSets.size(), computeWriteDescriptorSets.data(), 0, NULL);
-
 }
 
 void VulkanFire::prepareComputePipelines(std::string assetPath){
@@ -651,6 +619,12 @@ void VulkanFire::prepareComputePipelines(std::string assetPath){
 
     computePipelineCreateInfo.stage = exampleBase->loadShader(assetPath + "shaders/particlefire/moveBurn.comp.spv", VK_SHADER_STAGE_COMPUTE_BIT);
     VK_CHECK_RESULT(vkCreateComputePipelines(device, pipelineCache, 1, &computePipelineCreateInfo, nullptr, &moveBurnPipeline));
+
+    computePipelineCreateInfo.stage = exampleBase->loadShader(assetPath + "shaders/particlefire/particleCollision.comp.spv", VK_SHADER_STAGE_COMPUTE_BIT);
+    VK_CHECK_RESULT(vkCreateComputePipelines(device, pipelineCache, 1, &computePipelineCreateInfo, nullptr, &collisionPipeline));
+
+    computePipelineCreateInfo.stage = exampleBase->loadShader(assetPath + "shaders/particlefire/fillGrid.comp.spv", VK_SHADER_STAGE_COMPUTE_BIT);
+    VK_CHECK_RESULT(vkCreateComputePipelines(device, pipelineCache, 1, &computePipelineCreateInfo, nullptr, &fillGridPipeline));
 }
 
 void VulkanFire::createClickCommand(VkCommandPool cmdPool){
@@ -691,7 +665,7 @@ void VulkanFire::buildMoveBurnCommand(VkCommandBuffer& cmd){
     vkBeginCommandBuffer(cmd,&cmdBufInfo);
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, moveBurnPipeline);
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, computePipelineLayout, 0, 1, &moveBurnDescriptorSet, 0, 0);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, computePipelineLayout, 0, 1, &computeDescriptorSet, 0, 0);
 
     // Dispatch the compute job
     std::cout<<"click"<<bGroups<<std::endl;
@@ -963,7 +937,7 @@ void VulkanFire::updateTime(float frameTimer)
 {
     /*computeUbo.deltaT = frameTimer * -0.5f;*/
     //computeUbo.bPointsCount = 2;
-    computeUbo.delta= glm::vec4(1,6,1,frameTimer);
+    computeUbo.deltaT= frameTimer;//glm::vec4(1,6,1,frameTimer);
 
     computeUbo.clickPos = glm::vec4(5,2,3,4);
     //std::cout<< sizeof(computeUbo) << std::endl;
@@ -990,4 +964,34 @@ void VulkanFire::updateUniformBuffer(){
     assert(!err);
     memcpy(pData, &ubo, sizeof(ubo));
     vkUnmapMemory(device, uniformData.memory);
+}
+
+void VulkanFire::fillGrid(VkQueue queue, VkCommandPool cmdPool){
+
+    VkCommandBufferAllocateInfo cmdBufAllocateInfo =
+        vkTools::initializers::commandBufferAllocateInfo(
+            cmdPool,
+            VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+            1);
+
+    VkCommandBuffer fillCmd;
+    VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &fillCmd));
+
+    VkCommandBufferBeginInfo cmdBufInfo = vkTools::initializers::commandBufferBeginInfo();
+
+    vkBeginCommandBuffer(fillCmd,&cmdBufInfo);
+
+    vkCmdBindPipeline(fillCmd, VK_PIPELINE_BIND_POINT_COMPUTE, fillGridPipeline);
+    vkCmdBindDescriptorSets(fillCmd, VK_PIPELINE_BIND_POINT_COMPUTE, computePipelineLayout, 0, 1, &computeDescriptorSet, 0, 0);
+
+    // Dispatch the compute job
+    vkCmdDispatch(fillCmd, 15625, 1, 1);
+
+    vkEndCommandBuffer(fillCmd);
+
+    VkSubmitInfo submitInfo = vkTools::initializers::submitInfo();
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &fillCmd;
+
+    vkQueueSubmit(queue,1,&submitInfo,VK_NULL_HANDLE);
 }

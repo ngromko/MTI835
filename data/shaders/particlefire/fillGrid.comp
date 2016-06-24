@@ -1,0 +1,20 @@
+#version 450
+
+#extension GL_ARB_separate_shader_objects : enable
+#extension GL_ARB_shading_language_420pack : enable
+
+layout (binding = 3) buffer GRID
+{
+    uint cells[];
+};
+
+layout (local_size_x = 512) in;
+
+void main() 
+{
+    uint index = gl_GlobalInvocationID.x;
+    if (index >= 8000000)
+        return;
+    cells[index] = 8000000;
+}
+
