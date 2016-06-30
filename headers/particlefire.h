@@ -141,7 +141,6 @@ public:
     void cliked(VkQueue queue, glm::vec4 pos);
     uint32_t addBurningPoints(std::vector<glm::vec3> data, uint32_t objectNumber);
     void updateProjView(glm::mat4 projection, glm::mat4 view);
-    void VulkanFire::buildMoveBurnCommand(VkCommandBuffer& cmd);
 
     VulkanFire(VkDevice device, VulkanExampleBase *example);
 

@@ -126,11 +126,6 @@ void VulkanCube::prepareRigidBody(glm::vec3 size, glm::vec3 startPos, float mass
 
     groundTransform.setOrigin(btVector3(startPos.x,startPos.y,startPos.z));
 
-    /*btMatrix3x3 bob = btMatrix3x3(uboVS.modelMatrix[0].x,uboVS.modelMatrix[1].x,uboVS.modelMatrix[2].x,
-            uboVS.modelMatrix[0].y,uboVS.modelMatrix[1].y,uboVS.modelMatrix[2].y,
-            uboVS.modelMatrix[0].z,uboVS.modelMatrix[1].z,uboVS.modelMatrix[2].z);
-
-groundTransform.setBasis(bob);*/
     VkObjectMotionState* myMotionState = new VkObjectMotionState(groundTransform,this);
     if(mass!=0){
         groundShape->calculateLocalInertia(mass,localInertia);

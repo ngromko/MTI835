@@ -226,7 +226,7 @@ public:
 
         dynamicsWorld = new btDiscreteDynamicsWorld(dispatcher,overlappingPairCache,solver,collisionConfiguration);
 
-        dynamicsWorld->setGravity(btVector3(0,-2,0));
+        dynamicsWorld->setGravity(btVector3(-2,-4,-1));
 
         for (auto& cube : cubes)
         {
@@ -270,19 +270,19 @@ public:
         fire=new VulkanFire(device,this);
 
         std::vector<glm::vec3> allo;
-        //cubes.push_back(new VulkanCube(device,this,glm::vec3(10.0,0.1,10.0),glm::vec3(0.1,0.1,0.1),glm::vec3(5,-0.1,5),0));
-        /*int objnumber=0;
+        cubes.push_back(new VulkanCube(device,this,glm::vec3(15.0,0.1,15.0),glm::vec3(0.1,0.1,0.1),glm::vec3(5,-0.1,5),0));
+        int objnumber=0;
         for(int i = 0;i<5;i++){
             for(int j = 0;j<5;j++){
-                for(int k = 1;k<3;k++){
-                    burningCubes.push_back(new VulkanCube(device,this,glm::vec3(0.5f,0.5f,0.5f),glm::vec3(1,0,0),glm::vec3(0.5+i*2,0.5+k*2,0.5+j*2),0,allo));
+                for(int k = 0;k<3;k++){
+                    burningCubes.push_back(new VulkanCube(device,this,glm::vec3(0.5f,0.5f,0.5f),glm::vec3(1,0,0),glm::vec3(0.5+i*2,0.6+k*2,0.5+j*2),1,allo));
 
                     objectData.push_back(fire->addBurningPoints(allo,objnumber++));
                 }
             }
-        }*/
+        }
 
-        burningCubes.push_back(new VulkanCube(device,this,glm::vec3(1.0f,1.5f,1.0f),glm::vec3(1,0,0),glm::vec3(6.5,1.5f,5),0,allo));
+        /*burningCubes.push_back(new VulkanCube(device,this,glm::vec3(1.0f,1.5f,1.0f),glm::vec3(1,0,0),glm::vec3(6.5,1.5f,5),0,allo));
 
         objectData.push_back(fire->addBurningPoints(allo,0));
 
@@ -292,7 +292,7 @@ public:
 
         burningCubes.push_back(new VulkanCube(device,this,glm::vec3(0.5,0.5,0.5),glm::vec3(0,0,1),glm::vec3(6.5,4.5f,5),0,allo));
 
-        objectData.push_back(fire->addBurningPoints(allo,2));
+        objectData.push_back(fire->addBurningPoints(allo,2));*/
 
         std::cout <<" errrrre "<< allo.size() << std::endl;
 
@@ -348,7 +348,7 @@ public:
 		// Example uses one ubo and one combined image sampler 
 		std::vector<VkDescriptorPoolSize> poolSizes =
 		{
-            vkTools::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 60),
+            vkTools::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 100),
             vkTools::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 10),
             vkTools::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 100),
 		};
@@ -376,12 +376,7 @@ public:
             vkTools::initializers::descriptorSetLayoutBinding(
                 VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 VK_SHADER_STAGE_FRAGMENT_BIT,
-                1),
-            // Binding 2 : Fragment shader image sampler
-            vkTools::initializers::descriptorSetLayoutBinding(
-                VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                VK_SHADER_STAGE_FRAGMENT_BIT,
-                2)
+                1)
         };
 
 		VkDescriptorSetLayoutCreateInfo descriptorLayout =
@@ -430,26 +425,9 @@ public:
         }
         for (auto& cube : burningCubes)
         {
-            std::cout<<"test"<<std::endl;
+            std::cout<<"test "<< offset<<std::endl;
             cube->setupDescriptorSet(descriptorPool, descriptorSetLayout,offset ,pData);
             offset+=16*4;
-        }
-
-        VkCommandBuffer moveBurnCmd;
-
-        VkCommandBufferAllocateInfo cmdBufAllocateInfo =
-            vkTools::initializers::commandBufferAllocateInfo(
-                cmdPool,
-                VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-                1);
-
-        VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &moveBurnCmd));
-
-        fire->buildMoveBurnCommand(moveBurnCmd);
-
-        for (auto& cube : burningCubes)
-        {
-            cube->setupBurnCommand(queue,moveBurnCmd);
         }
 
         glm::mat4 model4 = glm::mat4();

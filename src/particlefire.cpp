@@ -55,6 +55,9 @@ void VulkanFire::compute(VkCommandBuffer cmdbuffer)
 
     vkCmdBindPipeline(cmdbuffer, VK_PIPELINE_BIND_POINT_COMPUTE, propageFire);
     vkCmdBindDescriptorSets(cmdbuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computePipelineLayout, 0, 1, &computeDescriptorSet, 0, 0);
+    vkCmdDispatch(cmdbuffer, bGroups, 1, 1);
+
+    vkCmdBindPipeline(cmdbuffer, VK_PIPELINE_BIND_POINT_COMPUTE, moveBurnPipeline);
 
     // Dispatch the compute job
     vkCmdDispatch(cmdbuffer, bGroups, 1, 1);
@@ -119,7 +122,7 @@ uint32_t VulkanFire::addBurningPoints(std::vector<glm::vec3> data, uint32_t obje
             bp.baseNorm = glm::vec4(data[i+3],0.0f);
             bp.basePos[3]=1.0f;
             bp.nCount = 0;
-            bp.heat = 0.0f;
+            bp.heat = 75.05f + rnd(25.0f);
             burningPoints.push_back(bp);
         }
     }
@@ -653,25 +656,6 @@ void VulkanFire::createClickCommand(VkCommandPool cmdPool){
     vkCmdDispatch(clickCmd, bGroups, 1, 1);
 
     vkEndCommandBuffer(clickCmd);
-}
-
-void VulkanFire::buildMoveBurnCommand(VkCommandBuffer& cmd){
-    int bGroups  = 1;
-    while(bGroups*512<computeUbo.bPointsCount){
-        bGroups++;
-    }
-    VkCommandBufferBeginInfo cmdBufInfo = vkTools::initializers::commandBufferBeginInfo();
-
-    vkBeginCommandBuffer(cmd,&cmdBufInfo);
-
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, moveBurnPipeline);
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, computePipelineLayout, 0, 1, &computeDescriptorSet, 0, 0);
-
-    // Dispatch the compute job
-    std::cout<<"click"<<bGroups<<std::endl;
-    vkCmdDispatch(cmd, bGroups, 1, 1);
-
-    vkEndCommandBuffer(cmd);
 }
 
 void VulkanFire::cliked(VkQueue queue, glm::vec4 pos){

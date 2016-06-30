@@ -15,8 +15,6 @@ class VulkanObject
 protected:
     VkDevice device;
     VulkanExampleBase *exampleBase;
-    VkQueue queue;
-    VkCommandBuffer moveBurnPoints;
     uint8_t *pBurn;
     uint32_t offset;
 
@@ -34,20 +32,6 @@ public:
         updateUniformBuffer();
         //std::cout<<"model " << offset << std::endl;
         memcpy(pBurn+offset, &model, sizeof(model));
-        VkSubmitInfo submitInfo = vkTools::initializers::submitInfo();
-        submitInfo.commandBufferCount = 1;
-        submitInfo.pCommandBuffers = &moveBurnPoints;
-
-        // Submit to queue
-        vkDeviceWaitIdle(device);
-        vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
-    }
-
-    void setupBurnCommand(VkQueue mainqueue,VkCommandBuffer cmd){
-
-        queue = mainqueue;
-        moveBurnPoints=cmd;
-        updateModel(ubo.model);
     }
 
     void updateProjView(glm::mat4 projection, glm::mat4 view){
