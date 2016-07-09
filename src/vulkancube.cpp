@@ -1,26 +1,20 @@
 /*
-* Vulkan Example - Animated gears using multiple uniform buffers
-*
-* See readme.md for details
-*
-* Copyright (C) 2015 by Sascha Willems - www.saschawillems.de
-*
-* This code is licensed under the MIT license (MIT) (http://opensource.org/licenses/MIT)
+Gère la creation de cubes pour la scène
 */
 
 #include "VulkanCube.h"
 
-VulkanCube::VulkanCube(VkDevice mdevice, VulkanExampleBase *mexample,glm::vec3 halfSize,glm::vec3 color, glm::vec3 startPos,float mass): VulkanObject(mdevice,mexample)
+VulkanCube::VulkanCube(VkDevice mdevice, VulkanExampleBase *mexample,glm::vec3 halfSize,vkTools::VulkanTexture *eTexture, glm::mat4 startPos,float mass): VulkanObject(mdevice,mexample,eTexture)
 {
-    prepareVertices(halfSize,color);
-    prepareRigidBody(halfSize, startPos, mass);
+    prepareVertices(halfSize,glm::vec3(1,1,1));
+    prepareRigidBody(halfSize, startPos[3], mass);
     prepareUniformBuffer(startPos);
 }
 
-VulkanCube::VulkanCube(VkDevice mdevice, VulkanExampleBase *mexample,glm::vec3 halfSize,glm::vec3 color, glm::vec3 startPos,float mass,std::vector<glm::vec3>& points) : VulkanObject(mdevice,mexample)
+VulkanCube::VulkanCube(VkDevice mdevice, VulkanExampleBase *mexample,glm::vec3 halfSize,vkTools::VulkanTexture *eTexture, glm::mat4 startPos,float mass,std::vector<glm::vec3>& points) : VulkanObject(mdevice,mexample,eTexture)
 {
-    points = prepareVertices(halfSize,color);
-    prepareRigidBody(halfSize, startPos, mass);
+    points = prepareVertices(halfSize,glm::vec3(1,1,1));
+    prepareRigidBody(halfSize, startPos[3], mass);
     prepareUniformBuffer(startPos);
 }
 
@@ -116,7 +110,7 @@ std::vector<glm::vec3> VulkanCube::prepareVertices(glm::vec3 halfSize,glm::vec3 
     return result;
 }
 
-void VulkanCube::prepareRigidBody(glm::vec3 size, glm::vec3 startPos, float mass){
+void VulkanCube::prepareRigidBody(glm::vec3 size, glm::vec4 startPos, float mass){
 
     btCollisionShape* groundShape = new btBoxShape(btVector3(btScalar(size.x),btScalar(size.y),btScalar(size.z)));
     btVector3 localInertia(0,0,0);
@@ -142,48 +136,4 @@ void VulkanCube::draw(VkCommandBuffer cmdbuffer, VkPipelineLayout pipelineLayout
     vkCmdBindDescriptorSets(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, NULL);
 	vkCmdBindVertexBuffers(cmdbuffer, 0, 1, &vertexBuffer.buf, offsets);
     vkCmdDraw(cmdbuffer, 36, 1, 0, 0);
-}
-
-void VulkanCube::setupDescriptorSet(VkDescriptorPool pool, VkDescriptorSetLayout descriptorSetLayout, uint32_t offSet, uint8_t* pdata)
-{
-    offset = offSet;
-    this->pBurn = pdata;
-	VkDescriptorSetAllocateInfo allocInfo =
-		vkTools::initializers::descriptorSetAllocateInfo(
-			pool,
-			&descriptorSetLayout,
-			1);
-
-	VkResult vkRes = vkAllocateDescriptorSets(device, &allocInfo, &descriptorSet);
-	assert(!vkRes);
-
-	// Binding 0 : Vertex shader uniform buffer
-	VkWriteDescriptorSet writeDescriptorSet =
-		vkTools::initializers::writeDescriptorSet(
-			descriptorSet,
-			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-			0,
-            &uniformData.descriptor);
-
-	vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, NULL);
-}
-
-void VulkanCube::prepareUniformBuffer(glm::vec3 pos)
-{
-    ubo.model= glm::mat4();
-
-    ubo.model = glm::translate(ubo.model,pos);
-
-	VkResult err;
-    exampleBase->createBuffer(
-        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-        sizeof(ubo),
-        &ubo,
-        &uniformData.buffer,
-        &uniformData.memory,
-        &uniformData.descriptor);
-}
-
-btRigidBody* VulkanCube::getRigidBody(){
-    return rbody;
 }

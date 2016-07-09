@@ -95,6 +95,7 @@ void VulkanFire::compute(VkCommandBuffer cmdbuffer)
 
 void VulkanFire::draw(VkCommandBuffer cmdbuffer)
 {
+    std::cout<<"draw fire" << std::endl;
     // Particle system
     vkCmdBindPipeline(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, drawParticles);
     vkCmdBindDescriptorSets(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, NULL);
@@ -108,21 +109,22 @@ uint32_t VulkanFire::addBurningPoints(std::vector<glm::vec3> data, uint32_t obje
 
     int size = data.size();
     int normalSize=0;
-    std::vector<glm::vec3> allPoints;
+    std::vector<glm::vec3> allPoints=data;
     BurningPoint bp;
     uint32_t bSize = burningPoints.size();
     for(int i=0;i<size;i+=4){
-        normalSize = allPoints.size();
-        triangulate(data,i,allPoints);
-        for(int j=normalSize;j<allPoints.size();j++){
-            bp.pos[0] = bp.basePos[0] = allPoints[j].x;
-            bp.pos[1] = bp.basePos[1] = allPoints[j].y;
-            bp.pos[2] = bp.basePos[2] = allPoints[j].z;
+        //normalSize = allPoints.size();
+        //triangulate(data,i,allPoints);
+        for(int j=0;j<3;j++){
+            bp.pos[0] = bp.basePos[0] = allPoints[i+j].x;
+            bp.pos[1] = bp.basePos[1] = allPoints[i+j].y;
+            bp.pos[2] = bp.basePos[2] = allPoints[i+j].z;
             bp.pos[3] = 0.0f;
             bp.baseNorm = glm::vec4(data[i+3],0.0f);
             bp.basePos[3]=1.0f;
             bp.nCount = 0;
-            bp.heat = 75.05f + rnd(25.0f);
+            bp.heat = 0.0f;
+            //bp.heat=75.05f + rnd(25.0f);
             burningPoints.push_back(bp);
         }
     }
@@ -295,17 +297,15 @@ void VulkanFire::prepareParticles(VkQueue queue)
     glm::vec3 minVel = glm::vec3(-3.0f, 0.5f, -3.0f);
     glm::vec3 maxVel = glm::vec3(3.0f, 7.0f, 3.0f);
     std::vector<Particle> particleBuffer;
-    std::cout<< "debut " <<computeUbo.bPointsCount<< std::endl;
+
     particleBuffer.resize(computeUbo.bPointsCount);
     computeUbo.particleCount =computeUbo.bPointsCount;
-    int row=0;
-    int col=0;
-    float step=3.0f;
+
     for (auto& particle : particleBuffer)
     {
-        particle.pos[0]=5;
+        particle.pos[0]=0;
         particle.pos[1]=7;
-        particle.pos[2]=5;
+        particle.pos[2]=0;
         particle.alpha = 0.75f;//rnd(0.75f);
         particle.size = 0.05f + rnd(0.025f);
         particle.color = glm::vec4(1.0f);
@@ -313,12 +313,6 @@ void VulkanFire::prepareParticles(VkQueue queue)
         particle.rotation = rnd(2.0f * M_PI);
         particle.vel.w = rnd(2.0f) - rnd(2.0f);
         particle.vel=glm::vec4(0.0f, minVel.y + rnd(maxVel.y - minVel.y), 0.0f, 0.0f);
-
-        row++;
-        if(row==60){
-            row=0;
-            col++;
-        }
     }
 
 
@@ -335,7 +329,7 @@ void VulkanFire::prepareParticles(VkQueue queue)
         VkDeviceMemory memory;
         VkBuffer buffer;
     } stagingBuffer;
-std::cout<< "alloc particle " <<sizeof(Particle)<< std::endl;
+std::cout<< "alloc particle " <<storageBufferSize<< std::endl;
     exampleBase->createBuffer(
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,

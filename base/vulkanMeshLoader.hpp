@@ -418,7 +418,7 @@ public:
 		VkPhysicalDeviceMemoryProperties deviceMemoryProperties,
 		vkMeshLoader::MeshBuffer *meshBuffer,
 		std::vector<vkMeshLoader::VertexLayout> layout,
-		float scale,
+                glm::vec3 scale,
 		bool useStaging,
 		VkCommandBuffer copyCmd,
 		VkQueue copyQueue)
@@ -427,23 +427,23 @@ public:
 		for (int m = 0; m < m_Entries.size(); m++)
 		{
 			for (int i = 0; i < m_Entries[m].Vertices.size(); i++)
-			{
+			{                    
 				// Push vertex data depending on layout
 				for (auto& layoutDetail : layout)
 				{
 					// Position
 					if (layoutDetail == vkMeshLoader::VERTEX_LAYOUT_POSITION)
 					{
-						vertexBuffer.push_back(m_Entries[m].Vertices[i].m_pos.x * scale);
-						vertexBuffer.push_back(m_Entries[m].Vertices[i].m_pos.y * scale);
-						vertexBuffer.push_back(m_Entries[m].Vertices[i].m_pos.z * scale);
+                                                vertexBuffer.push_back(m_Entries[m].Vertices[i].m_pos.x * scale.x);
+                                                vertexBuffer.push_back(m_Entries[m].Vertices[i].m_pos.y * scale.y);
+                                                vertexBuffer.push_back(m_Entries[m].Vertices[i].m_pos.z * scale.z);
 					}
 					// Normal
 					if (layoutDetail == vkMeshLoader::VERTEX_LAYOUT_NORMAL)
 					{
-						vertexBuffer.push_back(m_Entries[m].Vertices[i].m_normal.x);
-						vertexBuffer.push_back(-m_Entries[m].Vertices[i].m_normal.y);
-						vertexBuffer.push_back(m_Entries[m].Vertices[i].m_normal.z);
+                                                vertexBuffer.push_back(m_Entries[m].Vertices[i].m_normal.x);
+                                                vertexBuffer.push_back(m_Entries[m].Vertices[i].m_normal.y);
+                                                vertexBuffer.push_back(m_Entries[m].Vertices[i].m_normal.z);
 					}
 					// Texture coordinates
 					if (layoutDetail == vkMeshLoader::VERTEX_LAYOUT_UV)
@@ -648,9 +648,32 @@ public:
 			deviceMemoryProperties,
 			meshBuffer,
 			layout,
-			scale,
+                        glm::vec3(scale,scale,scale),
 			false,
 			VK_NULL_HANDLE,
 			VK_NULL_HANDLE);
 	}
+
+        std::vector<glm::vec3> getAllFaces(glm::vec3 scale){
+            std::vector<glm::vec3> result;
+            std::cout<<"isize " << m_Entries[0].Indices.size() << std::endl;
+            std::cout<<"isize " << m_Entries[0].Vertices.size() << std::endl;
+
+            for (int i = 0; i < m_Entries[0].Vertices.size(); i+=3)
+            {
+                /*result.push_back(m_Entries[0].Vertices[m_Entries[0].Indices[i]].m_pos);
+                result.push_back(m_Entries[0].Vertices[m_Entries[0].Indices[i+1]].m_pos);
+                result.push_back(m_Entries[0].Vertices[m_Entries[0].Indices[i+2]].m_pos);
+                result.push_back(m_Entries[0].Vertices[m_Entries[0].Indices[i+2]].m_normal);*/
+
+
+                result.push_back(m_Entries[0].Vertices[i].m_pos*scale);
+                result.push_back(m_Entries[0].Vertices[i+1].m_pos*scale);
+                result.push_back(m_Entries[0].Vertices[i+2].m_pos*scale);
+                result.push_back(m_Entries[0].Vertices[i].m_normal);
+
+                //std::cout<<"isize " << m_Entries[0].Vertices[i].m_pos.x << " "<<m_Entries[0].Vertices[i].m_pos.y<<" "<<m_Entries[0].Vertices[i].m_pos.z << std::endl;
+            }
+            return result;
+        }
 };

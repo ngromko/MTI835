@@ -366,7 +366,7 @@ void VulkanExampleBase::loadMesh(
 	std::string filename,
 	vkMeshLoader::MeshBuffer * meshBuffer,
 	std::vector<vkMeshLoader::VertexLayout> vertexLayout,
-	float scale)
+    glm::vec3 scale, std::vector<glm::vec3>& bPoints)
 {
 	VulkanMeshLoader *mesh = new VulkanMeshLoader();
 
@@ -376,6 +376,8 @@ void VulkanExampleBase::loadMesh(
 
 	mesh->LoadMesh(filename);
 	assert(mesh->m_Entries.size() > 0);
+
+    bPoints = mesh->getAllFaces(scale);
 
 	VkCommandBuffer copyCmd = VulkanExampleBase::createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, false);
 
@@ -402,7 +404,8 @@ void VulkanExampleBase::renderLoop()
 	destHeight = height;
 #if defined(_WIN32)
 	MSG msg;
-	while (TRUE)
+    int i=0;
+    while (true)
 	{
 		auto tStart = std::chrono::high_resolution_clock::now();
 		if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
@@ -608,7 +611,7 @@ void VulkanExampleBase::submitPrePresentBarrier(VkImage image)
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &prePresentCmdBuffer;
 
-	VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE));
+    VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE));
 }
 
 void VulkanExampleBase::submitPostPresentBarrier(VkImage image)
@@ -1113,11 +1116,12 @@ void VulkanExampleBase::handleMessages(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
 			break;
 		}
 		keyPressed((uint32_t)wParam);
-		break;        
+        break;
+    case WM_RBUTTONUP:
+        releaseGrab();
+        break;
 	case WM_RBUTTONDOWN:
-        mousePos.x = (float)LOWORD(lParam);
-        mousePos.y = (float)HIWORD(lParam);
-        pick((float)LOWORD(lParam),(float)HIWORD(lParam));
+        pick((float)LOWORD(lParam),(float)HIWORD(lParam),true);
         break;
 	case WM_LBUTTONDOWN:
         mousePos.x = (float)LOWORD(lParam);
@@ -1134,11 +1138,7 @@ void VulkanExampleBase::handleMessages(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
 	case WM_MOUSEMOVE:
 		if (wParam & MK_RBUTTON)
 		{
-            //int32_t posx = LOWORD(lParam);
-            //int32_t posy = HIWORD(lParam);
-            //zoom += (mousePos.y - (float)posy) * .005f * zoomSpeed;
-            //mousePos = glm::vec2((float)posx, (float)posy);
-            //viewChanged();
+            drag((float)LOWORD(lParam),(float)HIWORD(lParam));
 		}
 		if (wParam & MK_LBUTTON)
 		{
@@ -1440,7 +1440,17 @@ void VulkanExampleBase::viewChanged()
 	// Can be overrdiden in derived class
 }
 
-void VulkanExampleBase::pick(float x,float y)
+void VulkanExampleBase::pick(float x, float y, bool a)
+{
+    // Can be overrdiden in derived class
+}
+
+void VulkanExampleBase::drag(float x,float y)
+{
+    // Can be overrdiden in derived class
+}
+
+void VulkanExampleBase::releaseGrab()
 {
     // Can be overrdiden in derived class
 }

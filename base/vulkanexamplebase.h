@@ -229,7 +229,9 @@ public:
 	void initxcbConnection();
 	void handleEvent(const xcb_generic_event_t *event);
 #endif
-    virtual void pick(float,float);
+    virtual void pick(float,float,bool);
+    virtual void drag(float,float);
+    virtual void releaseGrab();
 	// Pure virtual render function (override in derived class)
 	virtual void render() = 0;
 	// Called when view change occurs
@@ -329,11 +331,10 @@ public:
 		VkDescriptorBufferInfo *descriptor);
 
 	// Load a mesh (using ASSIMP) and create vulkan vertex and index buffers with given vertex layout
-	void loadMesh(
-		std::string fiename,
+	void loadMesh(std::string fiename,
 		vkMeshLoader::MeshBuffer *meshBuffer,
 		std::vector<vkMeshLoader::VertexLayout> vertexLayout,
-		float scale);
+		glm::vec3 scale, std::vector<glm::vec3> &bPoints);
 
 	// Start the main render loop
 	void renderLoop();

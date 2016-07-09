@@ -26,6 +26,7 @@
 
 #include "btBulletDynamicsCommon.h"
 #include "vulkancube.h"
+#include "VulkanMesh.h"
 #include "particlefire.h"
 
 #define VERTEX_BUFFER_BIND_ID 0
@@ -35,12 +36,50 @@ class VulkanExample: public VulkanExampleBase
 {
 private:
 	vkTools::VulkanTexture textureColorMap;
+    vkTools::VulkanTexture armorTexture;
+    vkMeshLoader::MeshBuffer armorMesh;
+    vkMeshLoader::MeshBuffer cylinder;
+
+    btVector3 m_pickPos;
+    btScalar m_pickDist;
+    btPoint2PointConstraint* m_pickedConstraint;
+    btRigidBody* m_pickedBody;
+
     std::chrono::time_point<std::chrono::high_resolution_clock> tStart;
     btRigidBody* selectBody;
-    std::vector<uint32_t> objectData;
-
     float time = 0;
 
+    glm::vec4 getRayTo(float x, float y){
+        float fw = (float)width;
+        float fh = (float)height;
+        float mx = (x)/(fw);
+
+        glm::vec4 lRayStart_NDC(
+            (mx  - 0.5f) * 2.0f,
+            (2.0f * y)/ fh -1.0f, // [0, 768] -> [-1,1]
+            -1.0, // The near plane maps to Z=-1 in Normalized Device Coordinates
+            1.0f
+        );
+
+
+
+        glm::mat4 proj = glm::perspective(glm::radians(60.0f), (float)(width) / (float)height, 0.1f, 256.0f);
+        glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, -zoom),glm::vec3(0,0,0),glm::vec3(0,1,0));
+        //view = glm::lookAtLH(glm::vec3(0.0f, 0.0f, zoom),glm::vec3(0,0,0),glm::vec3(0,-1,0));
+        view = glm::scale(view,glm::vec3(1,-1,1));
+        //uboVS.modelMatrix = glm::mat4();
+        view = glm::rotate(view, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
+        view = glm::rotate(view, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
+        view = glm::rotate(view, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+
+        view = glm::translate(view,glm::vec3(-5.0f,0.0f,-5.0f));
+
+        // Faster way (just one inverse)
+        glm::mat4 M = glm::inverse(proj * view);
+        glm::vec4 lRayStart_world = M * lRayStart_NDC;
+        lRayStart_world/=lRayStart_world.w;
+        return lRayStart_world;
+    }
 public:
 	struct {
 		VkPipelineVertexInputStateCreateInfo inputState;
@@ -57,12 +96,20 @@ public:
         VkSampler sampler;
     } textures;
 
+    std::vector<vkMeshLoader::VertexLayout> vertexLayout =
+    {
+        vkMeshLoader::VERTEX_LAYOUT_POSITION,
+        vkMeshLoader::VERTEX_LAYOUT_COLOR,
+        vkMeshLoader::VERTEX_LAYOUT_UV,
+        vkMeshLoader::VERTEX_LAYOUT_NORMAL
+    };
+
     btDiscreteDynamicsWorld* dynamicsWorld;
 
     vkTools::UniformData objectsUniforme;
 
-    std::vector<VulkanCube*> cubes;
-    std::vector<VulkanCube*> burningCubes;
+    std::vector<VulkanObject*> cubes;
+    std::vector<VulkanObject*> burningCubes;
     VulkanFire* fire;
     int stop=0;
 	VkPipelineLayout pipelineLayout;
@@ -97,6 +144,8 @@ public:
         vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 
 		textureLoader->destroyTexture(textureColorMap);
+        textureLoader->destroyTexture(armorTexture);
+
         textureLoader->destroyTexture(textures.smoke);
         textureLoader->destroyTexture(textures.fire);
 
@@ -119,6 +168,11 @@ public:
             getAssetPath() + "textures/particle_fire.ktx",
             VK_FORMAT_BC3_UNORM_BLOCK,
             &textures.fire);
+
+        textureLoader->loadTexture(
+                    getAssetPath() + "models/armor/colormap.ktx",
+            VK_FORMAT_BC3_UNORM_BLOCK,
+            &armorTexture);
 
         // Create a custom sampler to be used with the particle textures
         // Create sampler
@@ -226,7 +280,7 @@ public:
 
         dynamicsWorld = new btDiscreteDynamicsWorld(dispatcher,overlappingPairCache,solver,collisionConfiguration);
 
-        dynamicsWorld->setGravity(btVector3(-2,-4,-1));
+        dynamicsWorld->setGravity(btVector3(0,-2,0));
 
         for (auto& cube : cubes)
         {
@@ -266,21 +320,42 @@ public:
 
 	void prepareVertices()
 	{
-        objectData.push_back(0);
         fire=new VulkanFire(device,this);
+        glm::mat4 cubeModel;
+        cubeModel = glm::translate(glm::mat4(),glm::vec3(5,-0.1,5));
 
         std::vector<glm::vec3> allo;
-        cubes.push_back(new VulkanCube(device,this,glm::vec3(15.0,0.1,15.0),glm::vec3(0.1,0.1,0.1),glm::vec3(5,-0.1,5),0));
+        cubes.push_back(new VulkanCube(device,this,glm::vec3(15.0,0.1,15.0),&textureColorMap,cubeModel,0));
         int objnumber=0;
-        for(int i = 0;i<5;i++){
-            for(int j = 0;j<5;j++){
-                for(int k = 0;k<3;k++){
-                    burningCubes.push_back(new VulkanCube(device,this,glm::vec3(0.5f,0.5f,0.5f),glm::vec3(1,0,0),glm::vec3(0.5+i*2,0.6+k*2,0.5+j*2),1,allo));
+        for(int i = 0;i<1;i++){
+            for(int j = 0;j<1;j++){
+                for(int k = 0;k<1;k++){
+                    cubeModel = glm::translate(glm::mat4(),glm::vec3(0.5+i*2,0.6+k*2,0.5+j*2));
+                    burningCubes.push_back(new VulkanCube(device,this,glm::vec3(0.5f,0.5f,0.5f),&textureColorMap,cubeModel,1,allo));
 
-                    objectData.push_back(fire->addBurningPoints(allo,objnumber++));
-                }
-            }
+                    fire->addBurningPoints(allo,objnumber++);
+               }
+          }
         }
+
+        loadMesh(getAssetPath() + "models/armor/armor.dae", &armorMesh, vertexLayout, glm::vec3(1.0f,-1.0f,1.0f), allo);
+
+
+        std::cout<<"allossize " << allo.size()<<std::endl;
+        fire->addBurningPoints(allo,objnumber++);
+        cubeModel = glm::translate(glm::mat4(),glm::vec3(5,13,5));
+
+        burningCubes.push_back(new VulkanMesh(device,this,&armorMesh,&armorTexture,cubeModel, 1, allo));
+
+        loadMesh(getAssetPath() + "models/armor/cylinder.obj", &cylinder, vertexLayout, glm::vec3(0.1f,-0.1f,0.1f), allo);
+
+
+        std::cout<<"allossize " << allo.size()<<std::endl;
+        fire->addBurningPoints(allo,objnumber++);
+        cubeModel = glm::translate(glm::mat4(),glm::vec3(2,13,2));
+
+        burningCubes.push_back(new VulkanMesh(device,this,&cylinder,&armorTexture,cubeModel, 1, allo));
+
 
         /*burningCubes.push_back(new VulkanCube(device,this,glm::vec3(1.0f,1.5f,1.0f),glm::vec3(1,0,0),glm::vec3(6.5,1.5f,5),0,allo));
 
@@ -400,51 +475,40 @@ public:
     {
         std::cout<<"enter"<<std::endl;
 
-        VkDeviceSize  size = 16*4*burningCubes.size();
-
-        std::cout<<size<<std::endl;
-        createBuffer(
-            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-            size,
-            nullptr,
-            &objectsUniforme.buffer,
-            &objectsUniforme.memory,
-            &objectsUniforme.descriptor);
-
-        fire->init(queue,cmdPool,renderPass,descriptorPool, &objectsUniforme.descriptor, textures.sampler,textures.fire,textures.smoke,getAssetPath());
-        uint32_t offset =0;
-        uint8_t* pData;
-
-        VkResult err = vkMapMemory(device, objectsUniforme.memory, 0, size, 0, (void **)&pData);
-        assert(!err);
         std::cout<<"test"<<std::endl;
         for (auto& cube : cubes)
         {
-            cube->setupDescriptorSet(descriptorPool, descriptorSetLayout,offset ,pData);
-        }
-        for (auto& cube : burningCubes)
-        {
-            std::cout<<"test "<< offset<<std::endl;
-            cube->setupDescriptorSet(descriptorPool, descriptorSetLayout,offset ,pData);
-            offset+=16*4;
+            cube->setupDescriptorSet(descriptorPool, descriptorSetLayout);
         }
 
-        glm::mat4 model4 = glm::mat4();
+        VkDeviceSize  size = 16*4*burningCubes.size();
+        if(size>0){
+            std::cout<<"testicool "<<size<< std::endl;
+            std::cout<<size<<std::endl;
+            createBuffer(
+                VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+                size,
+                nullptr,
+                &objectsUniforme.buffer,
+                &objectsUniforme.memory,
+                &objectsUniforme.descriptor);
 
-        model4 = glm::translate(model4,glm::vec3(6.5,4.5f,5));
-        //view = glm::rotate(view, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
-        model4 = glm::rotate(model4,glm::radians(45.0f),glm::vec3(1,0,0));
-        model4 = glm::rotate(model4,glm::radians(45.0f),glm::vec3(0,1,0));
+            fire->init(queue,cmdPool,renderPass,descriptorPool, &objectsUniforme.descriptor, textures.sampler,textures.fire,textures.smoke,getAssetPath());
+            uint32_t offset =0;
+            uint8_t* pData;
 
-        burningCubes[2]->updateModel(model4);
+            VkResult err = vkMapMemory(device, objectsUniforme.memory, 0, size, 0, (void **)&pData);
+            assert(!err);
 
 
-        btMatrix3x3 bob;
-        btQuaternion nob = btQuaternion(btVector3(1,0,0),glm::radians(45.0f));
-        nob += btQuaternion(btVector3(0,1,0),glm::radians(45.0f));
-        burningCubes[2]->getRigidBody()->getWorldTransform().setRotation(nob);
-
+            for (auto& cube : burningCubes)
+            {
+                std::cout<<"test "<< offset<<std::endl;
+                cube->setupDescriptorSet(descriptorPool, descriptorSetLayout,offset ,pData);
+                offset+=16*4;
+            }
+        }
     }
 
     void preparePipelinesCubes()
@@ -489,7 +553,6 @@ public:
 		std::vector<VkDynamicState> dynamicStateEnables = {
 			VK_DYNAMIC_STATE_VIEWPORT,
 			VK_DYNAMIC_STATE_SCISSOR,
-			VK_DYNAMIC_STATE_LINE_WIDTH
 		};
 		VkPipelineDynamicStateCreateInfo dynamicState =
 			vkTools::initializers::pipelineDynamicStateCreateInfo(
@@ -502,7 +565,7 @@ public:
 		std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages;
 
         shaderStages[0] = loadShader(getAssetPath() + "shaders/pipelines/base.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
-		shaderStages[1] = loadShader(getAssetPath() + "shaders/pipelines/color.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
+        shaderStages[1] = loadShader(getAssetPath() + "shaders/pipelines/texture.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
 	
 		VkGraphicsPipelineCreateInfo pipelineCreateInfo =
 			vkTools::initializers::pipelineCreateInfo(
@@ -521,7 +584,7 @@ public:
 		pipelineCreateInfo.stageCount = shaderStages.size();
 		pipelineCreateInfo.pStages = shaderStages.data();
 
-		VkResult err = vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipelines.solidColor);
+        VkResult err = vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipelines.solidColor);
         assert(!err);
 	}
 
@@ -583,27 +646,17 @@ public:
         updateUniformBuffers();
 	}
 
-    virtual void pick(float x, float y){
+    virtual void pick(float x, float y,bool grab){
 
-        float fw = (float)width;
-        float fh = (float)height;
-        float mx = (x)/(fw);
+        glm::vec4 m_rayTo = getRayTo(x,y);
 
-        glm::vec4 lRayStart_NDC(
-            (mx  - 0.5f) * 2.0f,
-            (2.0f * y)/ fh -1.0f, // [0, 768] -> [-1,1]
-            -1.0, // The near plane maps to Z=-1 in Normalized Device Coordinates
-            1.0f
-        );
-
-        glm::vec4 ori(
+        glm::vec4 m_rayFrom(
             0.0f,
             0.0f,
             0.0f,
             1.0f
         );
 
-        glm::mat4 proj = glm::perspective(glm::radians(60.0f), (float)(width) / (float)height, 0.1f, 256.0f);
         glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, -zoom),glm::vec3(0,0,0),glm::vec3(0,1,0));
         //view = glm::lookAtLH(glm::vec3(0.0f, 0.0f, zoom),glm::vec3(0,0,0),glm::vec3(0,-1,0));
         view = glm::scale(view,glm::vec3(1,-1,1));
@@ -614,29 +667,102 @@ public:
 
         view = glm::translate(view,glm::vec3(-5.0f,0.0f,-5.0f));
 
-        // Faster way (just one inverse)
-        glm::mat4 M = glm::inverse(proj * view);
-        glm::vec4 lRayStart_world = M * lRayStart_NDC; lRayStart_world/=lRayStart_world.w;
+        m_rayFrom = glm::inverse(view)*m_rayFrom; m_rayFrom/=m_rayFrom.w;
 
-        ori = glm::inverse(view)*ori; ori/=ori.w;
+        m_rayTo = m_rayFrom + (m_rayTo-m_rayFrom)*1000.0f;
 
-        glm::vec4 out_end = ori + (lRayStart_world-ori)*1000.0f;
+        btVector3 btRayTo = btVector3(m_rayTo.x, m_rayTo.y, m_rayTo.z);
+        btVector3 btRayFrom = btVector3(m_rayFrom.x, m_rayFrom.y, m_rayFrom.z);
 
-        btCollisionWorld::ClosestRayResultCallback RayCallback(
-            btVector3(ori.x, ori.y, ori.z),
-            btVector3(out_end.x, out_end.y, out_end.z)
+        btCollisionWorld::ClosestRayResultCallback rayCallback(
+            btRayFrom,
+            btRayTo
         );
         dynamicsWorld->rayTest(
-            btVector3(ori.x, ori.y, ori.z),
-            btVector3(out_end.x, out_end.y, out_end.z),
-            RayCallback
+            btRayFrom,
+            btRayTo,
+            rayCallback
         );
-        if(RayCallback.hasHit()) {
-            std::cout << "hit called "<< RayCallback.m_hitPointWorld.x() << " " << RayCallback.m_hitPointWorld.y() << " " << RayCallback.m_hitPointWorld.z()<< std::endl;
-            fire->cliked(queue,glm::vec4( RayCallback.m_hitPointWorld.x(), RayCallback.m_hitPointWorld.y(), RayCallback.m_hitPointWorld.z(),0.0f));
+        if(rayCallback.hasHit()) {
+            std::cout << "hit called "<< rayCallback.m_hitPointWorld.x() << " " << rayCallback.m_hitPointWorld.y() << " " << rayCallback.m_hitPointWorld.z()<< std::endl;
+            m_pickPos = rayCallback.m_hitPointWorld;
+            if(grab){
+                btRigidBody* pBody = btRigidBody::upcast(rayCallback.m_collisionObject);
+                if (pBody)
+                {
+                    // Code for adding a constraint from Bullet Demo's DemoApplication.cpp
+                    if (!(pBody->isStaticObject() || pBody->isKinematicObject()))
+                    {
+                        m_pickedBody = pBody;
+                        m_pickedBody->setActivationState(DISABLE_DEACTIVATION);
+                        //printf("pickPos=%f,%f,%f\n",pickPos.getX(),pickPos.getY(),pickPos.getZ());
+                        btVector3 localPivot = pBody->getCenterOfMassTransform().inverse() * m_pickPos;
+                        btPoint2PointConstraint* m_pickConstraint = new btPoint2PointConstraint(*pBody, localPivot);
+                        dynamicsWorld->addConstraint(m_pickConstraint, true);
+                        m_pickedConstraint = m_pickConstraint;
+                        btScalar mousePickClamping = 30.f;
+                        m_pickConstraint->m_setting.m_impulseClamp = mousePickClamping;
+                        //very weak constraint for picking
+                        m_pickConstraint->m_setting.m_tau = 0.001f;
+
+                        std::cout<<"grab"<<std::endl;
+                    }
+                }
+            }
+            else{
+                fire->cliked(queue,glm::vec4( m_pickPos.x(), m_pickPos.y(), m_pickPos.z(),0.0f));
+            }
+            m_pickDist = (m_pickPos - btRayFrom).length();
         }
-        else{
-            //trans.setOrigin(btVector3(0,0,0));
+    }
+
+    virtual void drag(float x, float y){
+        glm::vec4 m_rayTo = getRayTo(x,y);
+
+        glm::vec4 m_rayFrom(
+            0.0f,
+            0.0f,
+            0.0f,
+            1.0f
+        );
+
+        glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, -zoom),glm::vec3(0,0,0),glm::vec3(0,1,0));
+        //view = glm::lookAtLH(glm::vec3(0.0f, 0.0f, zoom),glm::vec3(0,0,0),glm::vec3(0,-1,0));
+        view = glm::scale(view,glm::vec3(1,-1,1));
+        //uboVS.modelMatrix = glm::mat4();
+        view = glm::rotate(view, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
+        view = glm::rotate(view, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
+        view = glm::rotate(view, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+
+        view = glm::translate(view,glm::vec3(-5.0f,0.0f,-5.0f));
+
+        m_rayFrom = glm::inverse(view)*m_rayFrom; m_rayFrom/=m_rayFrom.w;
+
+        btVector3 btRayTo = btVector3(m_rayTo.x, m_rayTo.y, m_rayTo.z);
+        btVector3 btRayFrom = btVector3(m_rayFrom.x, m_rayFrom.y, m_rayFrom.z);
+
+        btPoint2PointConstraint* pickCon = static_cast<btPoint2PointConstraint*>(m_pickedConstraint);
+        if (pickCon)
+        {
+            //keep it at the same picking distance
+
+            btVector3 dir = btRayTo-btRayFrom;
+            dir.normalize();
+            dir *= m_pickDist;
+
+            btVector3 newPivotB = btRayFrom + dir;
+            pickCon->setPivotB(newPivotB);
+        }
+    }
+    virtual void releaseGrab(){
+        if (m_pickedConstraint && dynamicsWorld)
+        {
+            dynamicsWorld->removeConstraint(m_pickedConstraint);
+            delete m_pickedConstraint;
+            m_pickedConstraint = NULL;
+            m_pickedBody->setDeactivationTime( 0.f );
+            m_pickedBody = NULL;
+            std::cout<<"release"<<std::endl;
         }
     }
 };

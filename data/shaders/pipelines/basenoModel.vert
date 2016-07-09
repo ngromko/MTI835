@@ -22,7 +22,8 @@ layout (location = 2) out vec3 outNormal;
 void main() 
 {
 	outColor = inColor;
-	outUV = inUV;
+    outUV = inUV;
+    outUV.t = 1.0 - outUV.t;
 	outNormal = inNormal;
-	gl_Position = vec4(inPos.xyz, 1.0);
+    gl_Position =  ubo.projectionMatrix * ubo.viewMatrix * ubo.model * vec4(inPos.x,-inPos.y,inPos.z, 1.0);
 }

@@ -22,8 +22,6 @@
 #include "vulkanObject.h"
 #include "vkObjectMotionState.h"
 
-#include "btBulletDynamicsCommon.h"
-
 struct Vertex
 {
 	float pos[3];
@@ -51,22 +49,14 @@ private:
 		VkDeviceMemory mem;
 	} vertexBuffer;
 
-    void prepareUniformBuffer(glm::vec3 startPos);
     std::vector<glm::vec3> prepareVertices(glm::vec3 halfSize,glm::vec3 color);
-    void prepareRigidBody(glm::vec3 size,glm::vec3 startPos,float mass);
+    void prepareRigidBody(glm::vec3 size,glm::vec4 startPos,float mass);
 
-    btRigidBody* rbody;
 public:
-	VkDescriptorSet descriptorSet;
-
 	void draw(VkCommandBuffer cmdbuffer, VkPipelineLayout pipelineLayout);
 
-    void setupDescriptorSet(VkDescriptorPool pool, VkDescriptorSetLayout descriptorSetLayout, uint32_t offSet, uint8_t *pData);
-    VulkanCube(VkDevice device, VulkanExampleBase *example,glm::vec3 halfSize,glm::vec3 color, glm::vec3 startPos,float mass);
-    VulkanCube(VkDevice mdevice, VulkanExampleBase *mexample, glm::vec3 halfSize, glm::vec3 color, glm::vec3 startPos, float mass, std::vector<glm::vec3>&);
     ~VulkanCube();
-
-    btRigidBody* getRigidBody();
-
+    VulkanCube(VkDevice mdevice, VulkanExampleBase *mexample, glm::vec3 halfSize, vkTools::VulkanTexture *eTexture, glm::mat4 atartModel, float mass);
+    VulkanCube(VkDevice mdevice, VulkanExampleBase *mexample, glm::vec3 halfSize, vkTools::VulkanTexture *eTexture, glm::mat4 atartModel, float mass, std::vector<glm::vec3> &points);
 };
 

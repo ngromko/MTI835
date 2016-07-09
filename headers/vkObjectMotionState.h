@@ -37,7 +37,6 @@ public:
         btQuaternion qua = worldTrans.getRotation();
 
         temp = glm::rotate(temp,qua.getAngle(),glm::vec3(qua.getAxis().x(),qua.getAxis().y(),qua.getAxis().z()));
-
         mSceneNode->updateModel(temp);
     }
 };

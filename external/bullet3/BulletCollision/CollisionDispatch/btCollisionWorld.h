@@ -193,7 +193,7 @@ public:
 		{
 		}
 
-		const btCollisionObject*		m_collisionObject;
+        const btCollisionObject*		m_collisionObject;
 		LocalShapeInfo*			m_localShapeInfo;
 		btVector3				m_hitNormalLocal;
 		btScalar				m_hitFraction;
@@ -204,7 +204,7 @@ public:
 	struct	RayResultCallback
 	{
 		btScalar	m_closestHitFraction;
-		const btCollisionObject*		m_collisionObject;
+        const btCollisionObject*		m_collisionObject;
 		short int	m_collisionFilterGroup;
 		short int	m_collisionFilterMask;
 		//@BP Mod - Custom flags, currently used to enable backface culling on tri-meshes, see btRaycastCallback.h. Apply any of the EFlags defined there on m_flags here to invoke.

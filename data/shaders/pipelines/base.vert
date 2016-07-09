@@ -23,6 +23,8 @@ void main()
 {
 	outColor = inColor;
 	outUV = inUV;
-	outNormal = inNormal;
+    outUV.t = 1.0 - outUV.t;
+	vec4 oNormal = ubo.model * vec4(inNormal.xyz, 0.0);
+    outNormal = oNormal.xyz;
     gl_Position =  ubo.projectionMatrix * ubo.viewMatrix * ubo.model * vec4(inPos.xyz, 1.0);
 }

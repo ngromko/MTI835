@@ -5632,6 +5632,33 @@ src\vulkancube.cpp.s:
 	$(MAKE) -f CMakeFiles\main.dir\build.make /nologo -$(MAKEFLAGS) CMakeFiles\main.dir\src\vulkancube.cpp.s
 .PHONY : src\vulkancube.cpp.s
 
+src\vulkanmesh.obj: src\vulkanmesh.cpp.obj
+
+.PHONY : src\vulkanmesh.obj
+
+# target to build an object file
+src\vulkanmesh.cpp.obj:
+	$(MAKE) -f CMakeFiles\main.dir\build.make /nologo -$(MAKEFLAGS) CMakeFiles\main.dir\src\vulkanmesh.cpp.obj
+.PHONY : src\vulkanmesh.cpp.obj
+
+src\vulkanmesh.i: src\vulkanmesh.cpp.i
+
+.PHONY : src\vulkanmesh.i
+
+# target to preprocess a source file
+src\vulkanmesh.cpp.i:
+	$(MAKE) -f CMakeFiles\main.dir\build.make /nologo -$(MAKEFLAGS) CMakeFiles\main.dir\src\vulkanmesh.cpp.i
+.PHONY : src\vulkanmesh.cpp.i
+
+src\vulkanmesh.s: src\vulkanmesh.cpp.s
+
+.PHONY : src\vulkanmesh.s
+
+# target to generate assembly for a file
+src\vulkanmesh.cpp.s:
+	$(MAKE) -f CMakeFiles\main.dir\build.make /nologo -$(MAKEFLAGS) CMakeFiles\main.dir\src\vulkanmesh.cpp.s
+.PHONY : src\vulkanmesh.cpp.s
+
 # Help Target
 help:
 	@echo The following are some of the valid targets for this Makefile:
@@ -6253,6 +6280,9 @@ help:
 	@echo ... src/vulkancube.obj
 	@echo ... src/vulkancube.i
 	@echo ... src/vulkancube.s
+	@echo ... src/vulkanmesh.obj
+	@echo ... src/vulkanmesh.i
+	@echo ... src/vulkanmesh.s
 .PHONY : help
 
 

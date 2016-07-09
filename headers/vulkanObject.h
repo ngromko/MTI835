@@ -10,6 +10,8 @@
 #include "vulkantools.h"
 #include "vulkanexamplebase.h"
 
+#include "btBulletDynamicsCommon.h"
+
 class VulkanObject
 {
 protected:
@@ -20,11 +22,29 @@ protected:
 
     vkTools::UniformData uniformData;
 
+    VkDescriptorSet descriptorSet;
+
     struct{
         glm::mat4 projection;
         glm::mat4 model;
         glm::mat4 view;
     } ubo;
+    btRigidBody* rbody;
+
+    vkTools::VulkanTexture* texture;
+
+    void prepareUniformBuffer(glm::mat4 model)
+    {
+        ubo.model= model;
+
+        exampleBase->createBuffer(
+            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            sizeof(ubo),
+            &ubo,
+            &uniformData.buffer,
+            &uniformData.memory,
+            &uniformData.descriptor);
+    }
 
 public:
     virtual void updateModel(glm::mat4 model){
@@ -39,7 +59,7 @@ public:
         ubo.view = view;
         updateUniformBuffer();
     }
-    VulkanObject(VkDevice mdevice, VulkanExampleBase *mexample) : device(mdevice), exampleBase(mexample){
+    VulkanObject(VkDevice mdevice, VulkanExampleBase *mexample, vkTools::VulkanTexture *eTexture) : device(mdevice), exampleBase(mexample), texture(eTexture){
 
     }
 
@@ -47,6 +67,56 @@ public:
         vkDestroyBuffer(device, uniformData.buffer, nullptr);
         vkFreeMemory(device, uniformData.memory, nullptr);
     }
+
+    btRigidBody* getRigidBody(){
+        return rbody;
+    }
+
+    void setupDescriptorSet(VkDescriptorPool pool, VkDescriptorSetLayout descriptorSetLayout){
+        VkDescriptorSetAllocateInfo allocInfo =
+            vkTools::initializers::descriptorSetAllocateInfo(
+                pool,
+                &descriptorSetLayout,
+                1);
+
+        VkResult vkRes = vkAllocateDescriptorSets(device, &allocInfo, &descriptorSet);
+        assert(!vkRes);
+
+        // Color map image descriptor
+        VkDescriptorImageInfo texDescriptorColorMap =
+            vkTools::initializers::descriptorImageInfo(
+                texture->sampler,
+                texture->view,
+                VK_IMAGE_LAYOUT_GENERAL);
+
+        std::vector<VkWriteDescriptorSet> writeDescriptorSets =
+        {
+            // Binding 0 : Vertex shader uniform buffer
+            vkTools::initializers::writeDescriptorSet(
+            descriptorSet,
+                VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                0,
+                &uniformData.descriptor),
+            // Binding 1 : Fragment shader image sampler
+            vkTools::initializers::writeDescriptorSet(
+                descriptorSet,
+                VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                1,
+                &texDescriptorColorMap)
+        };
+
+        vkUpdateDescriptorSets(device, writeDescriptorSets.size(), writeDescriptorSets.data(), 0, NULL);
+    }
+
+    void setupDescriptorSet(VkDescriptorPool pool, VkDescriptorSetLayout descriptorSetLayout, uint32_t offSet, uint8_t* pdata)
+    {
+        offset = offSet;
+        this->pBurn = pdata;
+        setupDescriptorSet(pool,descriptorSetLayout);
+        updateModel(ubo.model);
+    }
+
+    virtual void draw(VkCommandBuffer cmdbuffer, VkPipelineLayout pipelineLayout)=0;
 
 private:
     void updateUniformBuffer(){

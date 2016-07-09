@@ -1,0 +1,91 @@
+  m_rayFrom = m_pCamera->m_pos;
+    m_rayTo = m_pCamera->GetPickRay(m_cursorCoords.x(), m_cursorCoords.y());
+
+    btVector3 btRayFrom = btVector3(m_rayFrom.x, m_rayFrom.y, m_rayFrom.z);
+    btVector3 btRayTo = btVector3(m_rayTo.x, m_rayTo.y, m_rayTo.z);
+
+    if (g_pInput->MouseButtonPressed(PICK))
+    {
+        btCollisionWorld::ClosestRayResultCallback rayCallback(btRayFrom,btRayTo);
+        g_pBtDynamicsWorld->rayTest(btRayFrom, btRayTo, rayCallback);
+        if (rayCallback.hasHit())
+        {
+            PhysicsData* pPhysicsData = reinterpret_cast<PhysicsData*>(rayCallback.m_collisionObject->getUserPointer());
+            btRigidBody* pBody = btRigidBody::upcast(rayCallback.m_collisionObject);
+            if (pBody && pPhysicsData)
+            {
+                // Code for adding a constraint from Bullet Demo's DemoApplication.cpp
+                if (!(pBody->isStaticObject() || pBody->isKinematicObject()) && 
+                    (pPhysicsData->m_InitPhysicsData.CollisionGroup & COL_PARTICLE))
+                {
+                    m_pickedBody = pBody;
+
+                    m_pickPos = rayCallback.m_hitPointWorld;
+
+                    btVector3 localPivot = pBody->getCenterOfMassTransform().inverse() * m_pickPos;
+
+                    btTransform tr;
+                    tr.setIdentity();
+                    tr.setOrigin(localPivot);
+                    btGeneric6DofConstraint* dof6 = new btGeneric6DofConstraint(*pBody, tr, false);
+                    dof6->setLinearLowerLimit(btVector3(0,0,0));
+                    dof6->setLinearUpperLimit(btVector3(0,0,0));
+                    dof6->setAngularLowerLimit(btVector3(0,0,0));
+                    dof6->setAngularUpperLimit(btVector3(0,0,0));
+
+                    g_pBtDynamicsWorld->addConstraint(dof6);
+                    m_pickConstraint = dof6;
+
+                    dof6->setParam(BT_CONSTRAINT_STOP_CFM,0.8f,0);
+                    dof6->setParam(BT_CONSTRAINT_STOP_CFM,0.8f,1);
+                    dof6->setParam(BT_CONSTRAINT_STOP_CFM,0.8f,2);
+                    dof6->setParam(BT_CONSTRAINT_STOP_CFM,0.8f,3);
+                    dof6->setParam(BT_CONSTRAINT_STOP_CFM,0.8f,4);
+                    dof6->setParam(BT_CONSTRAINT_STOP_CFM,0.8f,5);
+
+                    dof6->setParam(BT_CONSTRAINT_STOP_ERP,0.1f,0);
+                    dof6->setParam(BT_CONSTRAINT_STOP_ERP,0.1f,1);
+                    dof6->setParam(BT_CONSTRAINT_STOP_ERP,0.1f,2);
+                    dof6->setParam(BT_CONSTRAINT_STOP_ERP,0.1f,3);
+                    dof6->setParam(BT_CONSTRAINT_STOP_ERP,0.1f,4);
+                    dof6->setParam(BT_CONSTRAINT_STOP_ERP,0.1f,5);
+
+                    //save mouse position for dragging
+                    m_pickDist = (m_pickPos - btRayFrom).length();
+                }
+            }
+        }
+    }
+    else if (g_pInput->MouseButtonReleased(PICK))
+    {
+        if (m_pickConstraint && g_pBtDynamicsWorld)
+        {
+            g_pBtDynamicsWorld->removeConstraint(m_pickConstraint);
+            delete m_pickConstraint;
+            m_pickConstraint = NULL;
+            m_pickedBody->setDeactivationTime( 0.f );
+            m_pickedBody = NULL;
+        }
+    }
+    else if (g_pInput->MouseButtonDown(PICK))
+    {
+        btGeneric6DofConstraint* pickCon = static_cast<btGeneric6DofConstraint*>(m_pickConstraint);
+        if (pickCon)
+        {
+            //keep it at the same picking distance
+
+            btVector3 btRayTo = btVector3(m_rayTo.x, m_rayTo.y, m_rayTo.z);
+            btVector3 btRayFrom = btVector3(m_rayFrom.x, m_rayFrom.y, m_rayFrom.z);
+            btVector3 oldPivotInB = pickCon->getFrameOffsetA().getOrigin();
+
+            btVector3 newPivotB;
+
+            btVector3 dir = btRayTo - btRayFrom;
+            dir.normalize();
+            dir *= m_pickDist;
+
+            newPivotB = btRayFrom + dir;
+
+            pickCon->getFrameOffsetA().setOrigin(newPivotB);
+        }
+    }

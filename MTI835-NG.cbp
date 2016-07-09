@@ -1309,6 +1309,9 @@
       <Unit filename="C:/Users/Nicholas/Documents/GitHub/MTI835/headers/VulkanCube.h">
          <Option target="main"/>
       </Unit>
+      <Unit filename="C:/Users/Nicholas/Documents/GitHub/MTI835/headers/VulkanMesh.h">
+         <Option target="main"/>
+      </Unit>
       <Unit filename="C:/Users/Nicholas/Documents/GitHub/MTI835/headers/particlefire.h">
          <Option target="main"/>
       </Unit>
@@ -1328,6 +1331,9 @@
          <Option target="main"/>
       </Unit>
       <Unit filename="C:/Users/Nicholas/Documents/GitHub/MTI835/src/vulkancube.cpp">
+         <Option target="main"/>
+      </Unit>
+      <Unit filename="C:/Users/Nicholas/Documents/GitHub/MTI835/src/vulkanmesh.cpp">
          <Option target="main"/>
       </Unit>
       <Unit filename="C:/Users/Nicholas/Documents/GitHub/MTI835/CMakeLists.txt">
