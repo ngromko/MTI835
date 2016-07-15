@@ -2,3 +2,4 @@ bin/*
 CMakeFiles/main.dir/*
 CMakeFiles/*
 CMakeFiles/Makefile2
+data/models/armor/letter.txt

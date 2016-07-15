@@ -105,123 +105,18 @@ void VulkanFire::draw(VkCommandBuffer cmdbuffer)
     vkCmdDraw(cmdbuffer, computeUbo.particleCount, 1, 0, 0);
 }
 
-uint32_t VulkanFire::addBurningPoints(std::vector<glm::vec3> data, uint32_t objectNumber){
-
-    int size = data.size();
-    int normalSize=0;
-    std::vector<glm::vec3> allPoints=data;
-    BurningPoint bp;
-    uint32_t bSize = burningPoints.size();
-    for(int i=0;i<size;i+=4){
-        //normalSize = allPoints.size();
-        //triangulate(data,i,allPoints);
-        for(int j=0;j<3;j++){
-            bp.pos[0] = bp.basePos[0] = allPoints[i+j].x;
-            bp.pos[1] = bp.basePos[1] = allPoints[i+j].y;
-            bp.pos[2] = bp.basePos[2] = allPoints[i+j].z;
-            bp.pos[3] = 0.0f;
-            bp.baseNorm = glm::vec4(data[i+3],0.0f);
-            bp.basePos[3]=1.0f;
-            bp.nCount = 0;
-            bp.heat = 0.0f;
-            //bp.heat=75.05f + rnd(25.0f);
-            burningPoints.push_back(bp);
-        }
-    }
-
-
-    for(int i=bSize;i<burningPoints.size();i++){
-        for(int j=bSize;j<burningPoints.size();j++){
-            if(i!=j){
-                glm::vec3 diff(burningPoints[j].pos - burningPoints[i].pos);
-                float d = glm::dot(diff,diff);
-                if(d<0.0121){
-                    burningPoints[i].neighboors[burningPoints[i].nCount]=j;
-                    burningPoints[i].nCount++;
-                }
-                if(burningPoints[i].nCount==10){
-                    break;
-                }
-            }
-        }
-        burningPoints[i].nCount+=objectNumber<<16;
-    }
-    //burningPoints[0].state=10000;
-
-    computeUbo.bPointsCount = burningPoints.size();
-    return burningPoints.size()-bSize;
-}
-void VulkanFire::triangulate(std::vector<glm::vec3> data,int i,std::vector<glm::vec3>& allPoints){
-    Fade_2D dt;
-    glm::mat3 mat,matt;
-    glm::vec3 u,v,w,a;
-    float z;
-    std::vector<Point2> vPoints;
-    std::vector<Point2*> vPPoints;
-    std::vector<Segment2> vSegments1;
-    std::vector<Triangle2*> vTriangles2;
-    std::vector<ConstraintGraph2*> vCG;
-
-    std::stringstream sstm;
-    u = glm::normalize(data.at(i+1)-data.at(i));
-    w = data.at(i+3);
-    v = glm::cross(u,w);
-
-    mat = glm::mat3();
-
-    mat[0]=u;
-    mat[1]=v;
-    mat[2]=w;
-
-    matt =glm::transpose(mat);
-    for(int j=0;j<3;j++){
-        a = matt*data.at(i+j);
-        vPoints.push_back(Point2(a.x,a.y));
-    }
-    z=a.z;
-    dt.insert(vPoints);
-    for(int j=0;j<3;j++){
-        Point2& p0(vPoints[j]);
-        Point2& p1(vPoints[(j+1)%3]);
-        vSegments1.push_back(Segment2(p0,p1));
-    }
-
-    ConstraintGraph2* pCG1=dt.createConstraint(vSegments1,CIS_CONSTRAINED_DELAUNAY);
-
-    vCG.push_back(pCG1);
-
-    Zone2* pZone=dt.createZone(vCG,ZL_GROW,vPoints[0]);
-    dt.applyConstraintsAndZones();
-    dt.refine(pZone,27,0.01,0.1,true);
-
-    pZone->getTriangles(vTriangles2);
-    vPoints.clear();
-
-    dt.getVertexPointers(vPPoints);
-    for(int i=0;i<vPPoints.size();i++){
-        u = mat*glm::vec3(vPPoints[i]->x(),vPPoints[i]->y(),z);
-        /*if(u.x < -1 || u.y< -1 || u.z<-1){
-            std::cout << "point bizartre " << u.x << " " << u.y << " " << u.z << std::endl;
-        }*/
-        allPoints.push_back(u);
-    }
-    dt.deleteZone(pZone);
-    vSegments1.clear();
-    vCG.clear();
-}
-
-void VulkanFire::init(VkQueue queue,VkCommandPool cpool, VkRenderPass renderpass,VkDescriptorPool pool,VkDescriptorBufferInfo* descriptor, VkSampler sampler,vkTools::VulkanTexture fire,vkTools::VulkanTexture smoke, std::string path){
+void VulkanFire::init(VkQueue queue,VkCommandPool cpool, VkRenderPass renderpass,VkDescriptorPool pool, VkDescriptorBufferInfo* bPointsDesc, uint32_t bCount, VkSampler sampler,vkTools::VulkanTexture fire,vkTools::VulkanTexture smoke, std::string path){
     std::cout<< "dajge" << std::endl;
+    computeUbo.bPointsCount=bCount;
     prepareParticles(queue);
-    prepareBurningPoints(queue);
     prepareGrid();
     prepareUniformBuffers();
 std::cout<< "dajge1" << std::endl;
-    prepareComputeLayout(pool,descriptor);
+    prepareComputeLayout(pool,bPointsDesc);
     std::cout<< "dajge2" << std::endl;
     prepareComputePipelines(path);
 std::cout<< "dajge3" << std::endl;
-    setupDescriptorSet(pool,sampler,fire,smoke);
+    setupDescriptorSet(pool,bPointsDesc,sampler,fire,smoke);
     prepareRenderPipelines(renderpass,path);
     createClickCommand(cpool);
     fillGrid(queue,cpool);
@@ -337,7 +232,7 @@ std::cout<< "alloc particle " <<storageBufferSize<< std::endl;
         particleBuffer.data(),
         &stagingBuffer.buffer,
         &stagingBuffer.memory);
-std::cout<< "alloc particle local" <<sizeof(BurningPoint)<< std::endl;
+std::cout<< "alloc particle local" <<computeUbo.particleCount<< std::endl;
     exampleBase->createBuffer(
         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
@@ -428,58 +323,6 @@ std::cout<< "alloc particle end" << std::endl;
     attributesParticles.inputState.pVertexAttributeDescriptions = attributesParticles.attributeDescriptions.data();
 }
 
-void VulkanFire::prepareBurningPoints(VkQueue queue){
-    // Setup and fill the compute shader storage buffers for
-    // vertex positions and velocities
-
-    uint32_t storageBufferSize = computeUbo.bPointsCount * sizeof(BurningPoint);
-
-    // Staging
-    // SSBO is static, copy to device local memory
-    // This results in better performance
-
-    struct {
-        VkDeviceMemory memory;
-        VkBuffer buffer;
-    } stagingBuffer;
-    std::cout<< "alloc burning" << std::endl;
-    exampleBase->createBuffer(
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-        storageBufferSize,
-        burningPoints.data(),
-        &stagingBuffer.buffer,
-        &stagingBuffer.memory);
-
-    exampleBase->createBuffer(
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        storageBufferSize,
-        nullptr,
-        &bPointsStorageBuffer.buffer,
-        &bPointsStorageBuffer.memory);
-
-    // Copy to staging buffer
-    VkCommandBuffer copyCmd = exampleBase->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
-
-    VkBufferCopy copyRegion = {};
-    copyRegion.size = storageBufferSize;
-    vkCmdCopyBuffer(
-        copyCmd,
-        stagingBuffer.buffer,
-        bPointsStorageBuffer.buffer,
-        1,
-        &copyRegion);
-
-    exampleBase->flushCommandBuffer(copyCmd, queue, true);
-
-    vkFreeMemory(device, stagingBuffer.memory, nullptr);
-    vkDestroyBuffer(device, stagingBuffer.buffer, nullptr);
-
-    bPointsStorageBuffer.descriptor.range = storageBufferSize;
-    bPointsStorageBuffer.descriptor.buffer = bPointsStorageBuffer.buffer;
-    bPointsStorageBuffer.descriptor.offset = 0;
-}
 
 void VulkanFire::prepareGrid(){
 
@@ -497,7 +340,7 @@ void VulkanFire::prepareGrid(){
     gridStorageBuffer.descriptor.offset = 0;
 }
 
-void VulkanFire::prepareComputeLayout(VkDescriptorPool descriptorPool, VkDescriptorBufferInfo* descriptor)
+void VulkanFire::prepareComputeLayout(VkDescriptorPool descriptorPool, VkDescriptorBufferInfo* burnDescriptor)
 {
     // Create compute pipeline
     // Compute pipelines are created separate from graphics pipelines
@@ -514,7 +357,7 @@ void VulkanFire::prepareComputeLayout(VkDescriptorPool descriptorPool, VkDescrip
             VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
             VK_SHADER_STAGE_COMPUTE_BIT,
             1),
-        // Binding 2 : Object models matrix storage buffer
+        // Binding 1 : Burning points storage buffer
         vkTools::initializers::descriptorSetLayoutBinding(
             VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
             VK_SHADER_STAGE_COMPUTE_BIT,
@@ -567,13 +410,13 @@ void VulkanFire::prepareComputeLayout(VkDescriptorPool descriptorPool, VkDescrip
             computeDescriptorSet,
             VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
             1,
-            &bPointsStorageBuffer.descriptor),
-        // Binding 2 : Object models matrix storage buffer
+            &burnDescriptor[0]),
+        // Binding 2 : Objects Models
         vkTools::initializers::writeDescriptorSet(
             computeDescriptorSet,
             VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
             2,
-            descriptor),
+            &burnDescriptor[1]),
         // Binding 3 : Collision grid storage buffer
         vkTools::initializers::writeDescriptorSet(
             computeDescriptorSet,
@@ -829,7 +672,7 @@ void VulkanFire::prepareRenderPipelines(VkRenderPass renderPass,std::string asse
     memcpy(particleVkBuffer.mappedMemory, particleBuffer.data(), size);
 }*/
 
-void VulkanFire::setupDescriptorSet(VkDescriptorPool pool,VkSampler sampler,vkTools::VulkanTexture fire,vkTools::VulkanTexture smoke)
+void VulkanFire::setupDescriptorSet(VkDescriptorPool pool,VkDescriptorBufferInfo* infos, VkSampler sampler,vkTools::VulkanTexture fire,vkTools::VulkanTexture smoke)
 {
     std::cout<<"bobo" << std::endl;
     prepareRenderLayout(pool);
@@ -862,7 +705,7 @@ std::cout<<"bobo4" << std::endl;
         descriptorSet,
             VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             0,
-            &uniformData.descriptor),
+            &infos[2]),
         // Binding 1 : Smoke texture
         vkTools::initializers::writeDescriptorSet(
             descriptorSet,
@@ -882,18 +725,6 @@ std::cout<<"bobo4" << std::endl;
 
 void VulkanFire::prepareUniformBuffers()
 {
-    // Vertex shader uniform buffer block
-    std::cout<< "alloc uniform" << std::endl;
-
-    exampleBase->createBuffer(
-        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-        sizeof(ubo),
-        &ubo,
-        &uniformData.buffer,
-        &uniformData.memory,
-        &uniformData.descriptor);
-
-
     //computeUbo.deltaT=0.0f;
 
     std::cout<< "alloc cuniform" << std::endl;
@@ -928,20 +759,6 @@ void VulkanFire::addToWorld(btDiscreteDynamicsWorld* dw){
         dw->addRigidBody(particle.body);
         particle.body->setGravity(btVector3(0.0f,0.0f,0.0f));
     }*/
-}
-
-void VulkanFire::updateProjView(glm::mat4 projection, glm::mat4 view){
-    ubo.projection = projection;
-    ubo.view = view;
-    updateUniformBuffer();
-}
-
-void VulkanFire::updateUniformBuffer(){
-    uint8_t *pData;
-    VkResult err = vkMapMemory(device, uniformData.memory, 0, sizeof(ubo), 0, (void **)&pData);
-    assert(!err);
-    memcpy(pData, &ubo, sizeof(ubo));
-    vkUnmapMemory(device, uniformData.memory);
 }
 
 void VulkanFire::fillGrid(VkQueue queue, VkCommandPool cmdPool){

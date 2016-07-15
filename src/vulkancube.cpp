@@ -4,110 +4,108 @@ Gère la creation de cubes pour la scène
 
 #include "VulkanCube.h"
 
-VulkanCube::VulkanCube(VkDevice mdevice, VulkanExampleBase *mexample,glm::vec3 halfSize,vkTools::VulkanTexture *eTexture, glm::mat4 startPos,float mass): VulkanObject(mdevice,mexample,eTexture)
+VulkanCube::VulkanCube(VkDevice mdevice, VulkanExampleBase *mexample,VkQueue queue, glm::vec3 halfSize, glm::mat4 startPos, bool burnable, float mass, uint32_t objectNumber, std::vector<BurningPoint>& points) : VulkanObject(mdevice,mexample,startPos,burnable)
 {
-    prepareVertices(halfSize,glm::vec3(1,1,1));
+    prepareVertices(halfSize,points, objectNumber);
+    prepareIdex(queue);
     prepareRigidBody(halfSize, startPos[3], mass);
-    prepareUniformBuffer(startPos);
-}
-
-VulkanCube::VulkanCube(VkDevice mdevice, VulkanExampleBase *mexample,glm::vec3 halfSize,vkTools::VulkanTexture *eTexture, glm::mat4 startPos,float mass,std::vector<glm::vec3>& points) : VulkanObject(mdevice,mexample,eTexture)
-{
-    points = prepareVertices(halfSize,glm::vec3(1,1,1));
-    prepareRigidBody(halfSize, startPos[3], mass);
-    prepareUniformBuffer(startPos);
 }
 
 VulkanCube::~VulkanCube()
 {
-	vkDestroyBuffer(device, vertexBuffer.buf, nullptr);
-	vkFreeMemory(device, vertexBuffer.mem, nullptr);
 }
 
-std::vector<glm::vec3> VulkanCube::prepareVertices(glm::vec3 halfSize,glm::vec3 color){
+void VulkanCube::prepareVertices(glm::vec3 halfSize,std::vector<BurningPoint>& bPoints, uint32_t objectNumber){
 
     // Setup vertices
-    glm::vec3 point;
     std::vector<Vertex> vBuffer;
 
     // -Y
-    Vertex v = { { halfSize.x,-halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 }, { 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { -halfSize.x,-halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { halfSize.x,-halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 1.0, 0.0 },{ 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { halfSize.x,-halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 },{ 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { -halfSize.x,-halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 0.0, 1.0 },{ 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { -halfSize.x,-halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
+    Vertex v = { { halfSize.x,-halfSize.y, halfSize.z },{ 1.0, 1.0 }, { 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,-halfSize.y,-halfSize.z },{ 0.0, 0.0 },{ 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { halfSize.x,-halfSize.y,-halfSize.z },{ 1.0, 0.0 },{ 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { halfSize.x,-halfSize.y, halfSize.z },{ 1.0, 1.0 },{ 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,-halfSize.y, halfSize.z },{ 0.0, 1.0 },{ 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,-halfSize.y,-halfSize.z },{ 0.0, 0.0 },{ 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
     // +Y
-     v = { { halfSize.x,halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { halfSize.x,halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 1.0, 0.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { -halfSize.x,halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { halfSize.x,halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { -halfSize.x,halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { -halfSize.x,halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 0.0, 1.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { halfSize.x,halfSize.y, halfSize.z },{ 1.0, 1.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { halfSize.x,halfSize.y,-halfSize.z },{ 1.0, 0.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,halfSize.y,-halfSize.z },{ 0.0, 0.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { halfSize.x,halfSize.y, halfSize.z },{ 1.0, 1.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,halfSize.y,-halfSize.z },{ 0.0, 0.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,halfSize.y, halfSize.z },{ 0.0, 1.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
     // -X
-     v = { { -halfSize.x,-halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { -halfSize.x,-halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 0.0, 1.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { -halfSize.x,halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { -halfSize.x,-halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { -halfSize.x,halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { -halfSize.x,halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 1.0, 0.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,-halfSize.y,-halfSize.z },{ 0.0, 0.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,-halfSize.y, halfSize.z },{ 0.0, 1.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,halfSize.y, halfSize.z },{ 1.0, 1.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,-halfSize.y,-halfSize.z },{ 0.0, 0.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,halfSize.y, halfSize.z },{ 1.0, 1.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,halfSize.y,-halfSize.z },{ 1.0, 0.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
     // +X
-     v = { { halfSize.x,halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { halfSize.x,-halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { halfSize.x,halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 1.0, 0.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { halfSize.x,-halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { halfSize.x,halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { halfSize.x,-halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 0.0, 1.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { halfSize.x,halfSize.y, halfSize.z },{ 1.0, 1.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { halfSize.x,-halfSize.y,-halfSize.z },{ 0.0, 0.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { halfSize.x,halfSize.y,-halfSize.z },{ 1.0, 0.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { halfSize.x,-halfSize.y,-halfSize.z },{ 0.0, 0.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { halfSize.x,halfSize.y, halfSize.z },{ 1.0, 1.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+     v = { { halfSize.x,-halfSize.y, halfSize.z },{ 0.0, 1.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
     // -Z
-     v = { { halfSize.x,halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
-     v = { { -halfSize.x,-halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
-     v = { { -halfSize.x,halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 1.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
-     v = { { halfSize.x,halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
-     v = { { halfSize.x,-halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 1.0, 0.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
-     v = { { -halfSize.x,-halfSize.y,-halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
+     v = { { halfSize.x,halfSize.y,-halfSize.z },{ 1.0, 1.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,-halfSize.y,-halfSize.z },{ 0.0, 0.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,halfSize.y,-halfSize.z },{ 0.0, 1.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
+     v = { { halfSize.x,halfSize.y,-halfSize.z },{ 1.0, 1.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
+     v = { { halfSize.x,-halfSize.y,-halfSize.z },{ 1.0, 0.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,-halfSize.y,-halfSize.z },{ 0.0, 0.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
     // +Z
-     v = { { -halfSize.x,halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 0.0, 1.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
-     v = { { -halfSize.x,-halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 0.0, 0.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
-     v = { { halfSize.x,-halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 0.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
-     v = { { halfSize.x,halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 1.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
-     v = { { -halfSize.x,halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 0.0, 1.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
-     v = { { halfSize.x,-halfSize.y, halfSize.z }, { color.x, color.y, color.z },{ 1.0, 0.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,halfSize.y, halfSize.z },{ 0.0, 1.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,-halfSize.y, halfSize.z },{ 0.0, 0.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
+     v = { { halfSize.x,-halfSize.y, halfSize.z },{ 1.0, 0.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
+     v = { { halfSize.x,halfSize.y, halfSize.z },{ 1.0, 1.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
+     v = { { -halfSize.x,halfSize.y, halfSize.z },{ 0.0, 1.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
+     v = { { halfSize.x,-halfSize.y, halfSize.z },{ 1.0, 0.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
 
     float scalex = (halfSize.x-0.025)/halfSize.x;
     float scaley = (halfSize.y-0.025)/halfSize.y;
     float scalez = (halfSize.z-0.025)/halfSize.z;
-    std::vector<glm::vec3> result;
-    for(int i=0;i<12;i++){
-        for(int j=0;j<3;j++){
-            point = glm::vec3(vBuffer.at(3*i+j).pos[0]*scalex,vBuffer.at(3*i+j).pos[1]*scaley,vBuffer.at(3*i+j).pos[2]*scalez);
-            result.push_back(point);
+
+    burnStart = bPoints.size();
+
+    if(burnable){
+        for(int i=0;i<36;i+=3){
+            triangulate(vBuffer[i],vBuffer[i+1],vBuffer[i+2],bPoints);
         }
-        result.push_back(glm::vec3(vBuffer.at(3*i).normal[0],vBuffer.at(3*i).normal[1],vBuffer.at(3*i).normal[2]));
     }
-	int vertexBufferSize = vBuffer.size() * sizeof(Vertex);
+    else{
+        BurningPoint bp;
+        for(int i=0;i<36;i++){
+            bp.pos = glm::vec4(vBuffer[i].pos,0.0f);
+            bp.basePos = glm::vec4(vBuffer[i].pos,1.0f);
+            bp.baseNorm = bp.normal = glm::vec4(vBuffer[i].normal,0.0f);
+            bp.uvCoord = vBuffer[i].uv;
+            bp.nCount = 0;
+            bp.life.x=-1.0f;
+            bp.heat = 0.0f;
+            bPoints.push_back(bp);
+            indices.push_back(i);
+        }
+    }
 
-	VkMemoryAllocateInfo memAlloc = vkTools::initializers::memoryAllocateInfo();
-	VkMemoryRequirements memReqs;
-
-	VkResult err;
-	void *data;
-
-	// Generate vertex buffer
-	VkBufferCreateInfo vBufferInfo = vkTools::initializers::bufferCreateInfo(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, vertexBufferSize);
-	err = vkCreateBuffer(device, &vBufferInfo, nullptr, &vertexBuffer.buf);
-	assert(!err);
-	vkGetBufferMemoryRequirements(device, vertexBuffer.buf, &memReqs);
-	memAlloc.allocationSize = memReqs.size;
-	exampleBase->getMemoryType(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, &memAlloc.memoryTypeIndex);
-	err = vkAllocateMemory(device, &memAlloc, nullptr, &vertexBuffer.mem);
-	assert(!err);
-	err = vkMapMemory(device, vertexBuffer.mem, 0, vertexBufferSize, 0, &data);
-	assert(!err);
-	memcpy(data, vBuffer.data(), vertexBufferSize);
-	vkUnmapMemory(device, vertexBuffer.mem);
-	err = vkBindBufferMemory(device, vertexBuffer.buf, vertexBuffer.mem, 0);
-	assert(!err);
-    return result;
+    burnCount = bPoints.size()-burnStart;
+    for(int i=burnStart;i<bPoints.size();i++){
+        for(int j=burnStart;j<bPoints.size();j++){
+            if(i!=j){
+                glm::vec3 diff(bPoints[j].pos - bPoints[i].pos);
+                float d = glm::dot(diff,diff);
+                if(d<0.0121 && bPoints[j].pos.y >= bPoints[i].pos.y){
+                    bPoints[i].neighboors[bPoints[i].nCount]=j;
+                    bPoints[i].nCount++;
+                }
+                if(bPoints[i].nCount==10){
+                    break;
+                }
+            }
+        }
+        bPoints[i].nCount+=objectNumber<<16;
+    }
 }
 
 void VulkanCube::prepareRigidBody(glm::vec3 size, glm::vec4 startPos, float mass){
@@ -127,13 +125,4 @@ void VulkanCube::prepareRigidBody(glm::vec3 size, glm::vec4 startPos, float mass
 
     btRigidBody::btRigidBodyConstructionInfo rbInfo(mass,myMotionState,groundShape,localInertia);
     rbody = new btRigidBody(rbInfo,true);
-}
-
-
-void VulkanCube::draw(VkCommandBuffer cmdbuffer, VkPipelineLayout pipelineLayout)
-{
-	VkDeviceSize offsets[1] = { 0 };
-    vkCmdBindDescriptorSets(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, NULL);
-	vkCmdBindVertexBuffers(cmdbuffer, 0, 1, &vertexBuffer.buf, offsets);
-    vkCmdDraw(cmdbuffer, 36, 1, 0, 0);
 }

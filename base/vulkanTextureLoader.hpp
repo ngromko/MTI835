@@ -102,13 +102,14 @@ namespace vkTools
 
 			texture->width = (uint32_t)tex2D[0].dimensions().x;
 			texture->height = (uint32_t)tex2D[0].dimensions().y;
+                        std::cout<<"tex dim " << texture->width << " " << texture->height << std::endl;
 			texture->mipLevels = tex2D.levels();
 
 			// Get device properites for the requested texture format
 			VkFormatProperties formatProperties;
-			vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &formatProperties);
+                        vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &formatProperties);
 
-			// Only use linear tiling if requested (and supported by the device)
+                        // Only use linear tiling if requested (and supported by the device)
 			// Support for linear tiling is mostly limited, so prefer to use
 			// optimal tiling instead
 			// On most implementations linear tiling will only support a very

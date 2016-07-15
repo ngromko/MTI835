@@ -10,6 +10,7 @@ struct BurningPoint
     vec4 normal;
     vec4 baseNorm;
     uvec4 bob;
+    uvec4 boby;
     uvec4 bobb;
     uvec2 bobb3;
     uint nCount;

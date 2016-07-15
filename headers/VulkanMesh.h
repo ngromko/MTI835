@@ -25,19 +25,10 @@
 class VulkanMesh : public VulkanObject
 {
 private:
-    bool selectable;
-	struct UBO
-	{
-		glm::mat4 projection;
-        glm::mat4 model;
-		glm::mat4 view;
-	};
-    vkMeshLoader::MeshBuffer* meshBuffer;
-    void prepareRigidBody(std::vector<glm::vec3> bPoints, glm::mat4 startPos, float mass);
-
+    bool selectable;    
+    void prepareRigidBody(std::vector<BurningPoint> &bPoints, glm::mat4 startPos, float mass, uint32_t objectNumber);
 public:
     ~VulkanMesh();
-    VulkanMesh(VkDevice mdevice, VulkanExampleBase *mexample, vkMeshLoader::MeshBuffer *eMeshBuffer, vkTools::VulkanTexture *eTexture, glm::mat4 atartModel, float mass, std::vector<glm::vec3> &bPoints);
-    void draw(VkCommandBuffer cmdbuffer, VkPipelineLayout pipelineLayout);
+    VulkanMesh(VkDevice mdevice, VulkanExampleBase *mexample, VkQueue queue, std::vector<unsigned int> Indices, bool burnable, glm::mat4 atartModel, float mass, uint32_t objectNumber, uint32_t bPointStart, std::vector<BurningPoint> &bPoints);
 };
 

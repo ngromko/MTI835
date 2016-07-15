@@ -1128,6 +1128,8 @@ void VulkanExampleBase::handleMessages(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
         mousePos.y = (float)HIWORD(lParam);
         break;
 	case WM_MBUTTONDOWN:
+        pick((float)LOWORD(lParam),(float)HIWORD(lParam),false);
+        break;
 	case WM_MOUSEWHEEL:
 	{
 		short wheelDelta = GET_WHEEL_DELTA_WPARAM(wParam);

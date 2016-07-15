@@ -10,7 +10,23 @@
 #include "vulkantools.h"
 #include "vulkanexamplebase.h"
 
+#include <Fade_2D.h>
+using namespace GEOM_FADE2D;
+
 #include "btBulletDynamicsCommon.h"
+
+
+struct BurningPoint{
+    glm::vec4 pos;
+    glm::vec4 basePos;
+    glm::vec4 normal;
+    glm::vec4 baseNorm;
+    glm::vec2 uvCoord;
+    glm::vec2 life;
+    uint32_t neighboors[10];
+    uint32_t nCount;
+    float heat;
+};
 
 class VulkanObject
 {
@@ -19,60 +35,170 @@ protected:
     VulkanExampleBase *exampleBase;
     uint8_t *pBurn;
     uint32_t offset;
-
-    vkTools::UniformData uniformData;
+    uint32_t burnStart;
+    uint32_t burnCount;
 
     VkDescriptorSet descriptorSet;
 
-    struct{
-        glm::mat4 projection;
-        glm::mat4 model;
-        glm::mat4 view;
-    } ubo;
+    bool burnable;
+
+    struct Vertex
+    {
+        glm::vec3 pos;
+        glm::vec2 uv;
+        glm::vec3 normal;
+    };
+
+    std::vector<uint32_t> indices;
+    struct {
+        VkDeviceMemory memory;
+        VkBuffer buffer;
+    } indicesBuffer;
+
     btRigidBody* rbody;
 
-    vkTools::VulkanTexture* texture;
+    virtual void triangulate(Vertex v1, Vertex v2, Vertex v3, std::vector<BurningPoint>& allPoints){
+        Fade_2D dt;
+        BurningPoint bp;
+        glm::mat3 mat,matt;
+        glm::vec3 u,v,w,a;
+        float z;
+        std::vector<Point2> vPoints;
+        std::vector<Point2*> vPPoints;
+        std::vector<Segment2> vSegments1;
+        std::vector<Triangle2*> vTriangles2;
+        std::vector<ConstraintGraph2*> vCG;
 
-    void prepareUniformBuffer(glm::mat4 model)
-    {
-        ubo.model= model;
+        u = glm::normalize(v2.pos-v1.pos);
+        w = v1.normal;
+        v = glm::cross(u,w);
+
+        mat = glm::mat3();
+
+        mat[0]=u;
+        mat[1]=v;
+        mat[2]=w;
+
+        matt =glm::transpose(mat);
+        a = matt*v1.pos;
+        vPoints.push_back(Point2(a.x,a.y));
+        a = matt*v2.pos;
+        vPoints.push_back(Point2(a.x,a.y));
+        a = matt*v3.pos;
+        vPoints.push_back(Point2(a.x,a.y));
+        z=a.z;
+        dt.insert(vPoints);
+        for(int j=0;j<3;j++){
+            Point2& p0(vPoints[j]);
+            Point2& p1(vPoints[(j+1)%3]);
+            vSegments1.push_back(Segment2(p0,p1));
+        }
+
+        ConstraintGraph2* pCG1=dt.createConstraint(vSegments1,CIS_CONSTRAINED_DELAUNAY);
+
+        vCG.push_back(pCG1);
+
+        Zone2* pZone=dt.createZone(vCG,ZL_GROW,vPoints[0]);
+        dt.applyConstraintsAndZones();
+        dt.refine(pZone,27,0.01,0.1,true);
+
+        //pZone->getTriangles(vTriangles2);
+
+        dt.getVertexPointers(vPPoints);
+        dt.getTrianglePointers(vTriangles2);
+        uint32_t start = allPoints.size()-burnStart;
+        for(int i=0;i<vPPoints.size();i++){
+            a =mat*glm::vec3(vPPoints[i]->x(),vPPoints[i]->y(),z);
+            bp.pos = glm::vec4(a,0.0f);
+            bp.basePos = glm::vec4(a,1.0f);
+            bp.baseNorm = bp.normal = glm::vec4(v1.normal,0.0f);
+            bp.uvCoord = getUv(v1,v2,v3,a);
+            bp.nCount = 0;
+            bp.life.x=14.0f;
+            bp.heat = 0.0f;
+            allPoints.push_back(bp);
+        }
+        for(int i=0;i<vTriangles2.size();i++){
+            for(int j=0;j<vPPoints.size();j++){
+                if(vTriangles2[i]->getCorner(0)==vPPoints[j]){
+                    indices.push_back(j+start);
+                }
+                else if(vTriangles2[i]->getCorner(1)==vPPoints[j]){
+                    indices.push_back(j+start);
+                }
+                else if(vTriangles2[i]->getCorner(2)==vPPoints[j]){
+                    indices.push_back(j+start);
+                }
+            }
+        }
+        dt.deleteZone(pZone);
+        vSegments1.clear();
+        vPoints.clear();
+        vCG.clear();
+    }
+
+    void prepareIdex(VkQueue queue){
+
+        uint32_t storageBufferSize = indices.size()*sizeof(uint32_t);
+        std::cout << "indice size "<< storageBufferSize<<std::endl;
+        struct {
+            VkDeviceMemory memory;
+            VkBuffer buffer;
+        } stagingBuffer;
+        exampleBase->createBuffer(
+            VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+            storageBufferSize,
+            indices.data(),
+            &stagingBuffer.buffer,
+            &stagingBuffer.memory);
 
         exampleBase->createBuffer(
-            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-            sizeof(ubo),
-            &ubo,
-            &uniformData.buffer,
-            &uniformData.memory,
-            &uniformData.descriptor);
+            VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            storageBufferSize,
+            nullptr,
+            &indicesBuffer.buffer,
+            &indicesBuffer.memory);
+
+        // Copy to staging buffer
+        VkCommandBuffer copyCmd = exampleBase->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+
+        VkBufferCopy copyRegion = {};
+        copyRegion.size = storageBufferSize;
+        vkCmdCopyBuffer(
+            copyCmd,
+            stagingBuffer.buffer,
+            indicesBuffer.buffer,
+            1,
+            &copyRegion);
+
+        exampleBase->flushCommandBuffer(copyCmd, queue, true);
+
+        vkFreeMemory(device, stagingBuffer.memory, nullptr);
+        vkDestroyBuffer(device, stagingBuffer.buffer, nullptr);
     }
 
 public:
     virtual void updateModel(glm::mat4 model){
-        ubo.model = model;
-        updateUniformBuffer();
-        //std::cout<<"model " << offset << std::endl;
         memcpy(pBurn+offset, &model, sizeof(model));
     }
 
-    void updateProjView(glm::mat4 projection, glm::mat4 view){
-        ubo.projection = projection;
-        ubo.view = view;
-        updateUniformBuffer();
-    }
-    VulkanObject(VkDevice mdevice, VulkanExampleBase *mexample, vkTools::VulkanTexture *eTexture) : device(mdevice), exampleBase(mexample), texture(eTexture){
+    VulkanObject(VkDevice mdevice, VulkanExampleBase *mexample, glm::mat4 startModel, bool burn) : device(mdevice), exampleBase(mexample), burnable(burn), model(startModel){
 
     }
 
     ~VulkanObject(){
-        vkDestroyBuffer(device, uniformData.buffer, nullptr);
-        vkFreeMemory(device, uniformData.memory, nullptr);
     }
 
     btRigidBody* getRigidBody(){
         return rbody;
     }
 
-    void setupDescriptorSet(VkDescriptorPool pool, VkDescriptorSetLayout descriptorSetLayout){
+    void setupDescriptorSet(VkDescriptorPool pool, VkDescriptorSetLayout descriptorSetLayout, VkDescriptorBufferInfo* uboDesc, vkTools::VulkanTexture* eTexture, uint32_t offSet, uint8_t* pdata)
+    {
+        offset = offSet;
+        this->pBurn = pdata;
         VkDescriptorSetAllocateInfo allocInfo =
             vkTools::initializers::descriptorSetAllocateInfo(
                 pool,
@@ -85,8 +211,15 @@ public:
         // Color map image descriptor
         VkDescriptorImageInfo texDescriptorColorMap =
             vkTools::initializers::descriptorImageInfo(
-                texture->sampler,
-                texture->view,
+                eTexture[0].sampler,
+                eTexture[0].view,
+                VK_IMAGE_LAYOUT_GENERAL);
+
+        // Burn image descriptor
+        VkDescriptorImageInfo texDescriptorBurned =
+            vkTools::initializers::descriptorImageInfo(
+                eTexture[1].sampler,
+                eTexture[1].view,
                 VK_IMAGE_LAYOUT_GENERAL);
 
         std::vector<VkWriteDescriptorSet> writeDescriptorSets =
@@ -96,34 +229,49 @@ public:
             descriptorSet,
                 VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 0,
-                &uniformData.descriptor),
+                uboDesc),
             // Binding 1 : Fragment shader image sampler
             vkTools::initializers::writeDescriptorSet(
                 descriptorSet,
                 VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 1,
-                &texDescriptorColorMap)
+                &texDescriptorColorMap),
+            // Binding 2 : Fragment shader image sampler
+            vkTools::initializers::writeDescriptorSet(
+                descriptorSet,
+                VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                2,
+                &texDescriptorBurned)
         };
 
         vkUpdateDescriptorSets(device, writeDescriptorSets.size(), writeDescriptorSets.data(), 0, NULL);
+        updateModel(model);
     }
 
-    void setupDescriptorSet(VkDescriptorPool pool, VkDescriptorSetLayout descriptorSetLayout, uint32_t offSet, uint8_t* pdata)
+    void draw(VkCommandBuffer cmdbuffer, VkPipelineLayout pipelineLayout, VkBuffer* vertexBuffer)
     {
-        offset = offSet;
-        this->pBurn = pdata;
-        setupDescriptorSet(pool,descriptorSetLayout);
-        updateModel(ubo.model);
+        VkDeviceSize offsets[1] = { 0 };
+        vkCmdBindDescriptorSets(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, NULL);
+        vkCmdBindVertexBuffers(cmdbuffer, 0, 1, vertexBuffer, offsets);
+        vkCmdBindIndexBuffer(cmdbuffer, indicesBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdDrawIndexed(cmdbuffer, indices.size(), 1, 0, burnStart, 0);
     }
-
-    virtual void draw(VkCommandBuffer cmdbuffer, VkPipelineLayout pipelineLayout)=0;
 
 private:
-    void updateUniformBuffer(){
-        uint8_t *pData;
-        VkResult err = vkMapMemory(device, uniformData.memory, 0, sizeof(ubo), 0, (void **)&pData);
-        assert(!err);
-        memcpy(pData, &ubo, sizeof(ubo));
-        vkUnmapMemory(device, uniformData.memory);
+    glm::mat4 model;
+    glm::vec2 getUv(Vertex v1, Vertex v2, Vertex v3, glm::vec3 pos){
+        //http://answers.unity3d.com/questions/383804/calculate-uv-coordinates-of-3d-point-on-plane-of-m.html
+        // calculate vectors from point f to vertices v1.pos, v2.pos and v3.pos:
+        glm::vec3 f1 = v1.pos-pos;
+        glm::vec3 f2 = v2.pos-pos;
+        glm::vec3 f3 = v3.pos-pos;
+
+        // calculate the areas and factors (order of parameters doesn't matter):
+        float a = glm::length(glm::cross(v1.pos-v2.pos, v1.pos-v3.pos)); // main triangle area a
+        float a1 = glm::length(glm::cross(f2, f3)) / a; // v1.pos's triangle area / a
+        float a2 = glm::length(glm::cross(f3, f1)) / a; // v2.pos's triangle area / a
+        float a3 = glm::length(glm::cross(f1, f2)) / a; // v3.pos's triangle area / a
+        // find the uv corresponding to point f (uv1/uv2/uv3 are associated to v1.pos/v2.pos/v3.pos):
+        return v1.uv * a1 + v2.uv * a2 + v3.uv * a3;
     }
 };

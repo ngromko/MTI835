@@ -10,6 +10,7 @@ struct BurningPoint
     vec4 normal;
     vec4 baseNorm;
     vec4 dummy;
+    vec4 dummy1;
     vec4 dummy2;
     vec4 dummy3;
 };

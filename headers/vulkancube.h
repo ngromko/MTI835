@@ -22,14 +22,6 @@
 #include "vulkanObject.h"
 #include "vkObjectMotionState.h"
 
-struct Vertex
-{
-	float pos[3];
-    float color[3];
-    float uv[2];
-    float normal[3];
-};
-
 class VulkanCube : public VulkanObject
 {
 private:
@@ -43,20 +35,11 @@ private:
 
     // Reference to example for getting memory types
 
-	struct
-	{
-		VkBuffer buf;
-		VkDeviceMemory mem;
-	} vertexBuffer;
-
-    std::vector<glm::vec3> prepareVertices(glm::vec3 halfSize,glm::vec3 color);
+    void prepareVertices(glm::vec3 halfSize, std::vector<BurningPoint> &bPoints, uint32_t objectNumber);
     void prepareRigidBody(glm::vec3 size,glm::vec4 startPos,float mass);
 
 public:
-	void draw(VkCommandBuffer cmdbuffer, VkPipelineLayout pipelineLayout);
-
     ~VulkanCube();
-    VulkanCube(VkDevice mdevice, VulkanExampleBase *mexample, glm::vec3 halfSize, vkTools::VulkanTexture *eTexture, glm::mat4 atartModel, float mass);
-    VulkanCube(VkDevice mdevice, VulkanExampleBase *mexample, glm::vec3 halfSize, vkTools::VulkanTexture *eTexture, glm::mat4 atartModel, float mass, std::vector<glm::vec3> &points);
+    VulkanCube(VkDevice mdevice, VulkanExampleBase *mexample, VkQueue queue, glm::vec3 halfSize, glm::mat4 atartModel, bool burn, float mass, uint32_t objectNumber, std::vector<BurningPoint> &points);
 };
 

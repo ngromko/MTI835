@@ -21,6 +21,8 @@ struct BurningPoint
     vec4 basePos;
     vec4 normal;
     vec4 baseNorm;
+    vec2 uv;
+    vec2 life;
     uint neighs[10];
     uint nCount;
     float heat;
@@ -59,18 +61,20 @@ void main()
     
     uint ncount = me.nCount&15;
 
-    if(me.heat>=75.0f){
+    if(me.heat>=75.0f && me.life.x>0.0f){
         for(int i=0;i<ncount;i++){
             if(bPoints[me.neighs[i]].heat<=75.0f){
                 bPoints[me.neighs[i]].heat+=0.02f+sign(bPoints[me.neighs[i]].pos.y - me.pos.y)*0.01f;
             }
         }
         me.heat+=ubo.deltaT;
+        me.life.x-=ubo.deltaT;
         if(me.heat>75.5f){
             particles[index].pos=bPoints[index].pos;
             me.heat=75.0f;
         }
         bPoints[index].heat=me.heat;
+        bPoints[index].life.x=me.life.x;
     }
     
     /*

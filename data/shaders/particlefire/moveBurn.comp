@@ -9,6 +9,7 @@ struct BurningPoint
     vec4 basePos;
     vec4 normal;
     vec4 baseNorm;
+    uvec4 boby;
     uvec4 bob;
     uvec4 bobb;
     uvec4 bobb3;
