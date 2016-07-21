@@ -16,7 +16,8 @@ layout (binding = 0) uniform UBO
 
 layout (location = 0) out vec2 outUV;
 layout (location = 1) out vec3 outNormal;
-layout (location = 2) out float outHeat;
+layout (location = 2) out vec3 worldPos;
+layout (location = 3) out float outHeat;
 
 void main() 
 {
@@ -24,5 +25,6 @@ void main()
 	outUV = inUV;
     outUV.t = 1.0 - outUV.t;
     outNormal = inNormal.xyz;
-    gl_Position =  ubo.projectionMatrix * ubo.viewMatrix * vec4(inPos.xyz, 1.0);
+    worldPos = inPos;
+    gl_Position =  ubo.projectionMatrix * ubo.viewMatrix * vec4(inPos, 1.0);
 }

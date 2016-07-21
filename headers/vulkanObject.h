@@ -69,6 +69,10 @@ protected:
         std::vector<Triangle2*> vTriangles2;
         std::vector<ConstraintGraph2*> vCG;
 
+        uint32_t p1index;
+        uint32_t p2index;
+        uint32_t p3index;
+
         u = glm::normalize(v2.pos-v1.pos);
         w = v1.normal;
         v = glm::cross(u,w);
@@ -121,15 +125,18 @@ protected:
         for(int i=0;i<vTriangles2.size();i++){
             for(int j=0;j<vPPoints.size();j++){
                 if(vTriangles2[i]->getCorner(0)==vPPoints[j]){
-                    indices.push_back(j+start);
+                   p1index = j+start;
                 }
                 else if(vTriangles2[i]->getCorner(1)==vPPoints[j]){
-                    indices.push_back(j+start);
+                    p2index = j+start;
                 }
                 else if(vTriangles2[i]->getCorner(2)==vPPoints[j]){
-                    indices.push_back(j+start);
+                    p3index = j+start;
                 }
             }
+            indices.push_back(p1index);
+            indices.push_back(p2index);
+            indices.push_back(p3index);
         }
         dt.deleteZone(pZone);
         vSegments1.clear();
@@ -195,7 +202,7 @@ public:
         return rbody;
     }
 
-    void setupDescriptorSet(VkDescriptorPool pool, VkDescriptorSetLayout descriptorSetLayout, VkDescriptorBufferInfo* uboDesc, vkTools::VulkanTexture* eTexture, uint32_t offSet, uint8_t* pdata)
+    void setupDescriptorSet(VkDescriptorPool pool, VkDescriptorSetLayout descriptorSetLayout, VkDescriptorBufferInfo* uboDesc, vkTools::VulkanTexture** eTexture, uint32_t offSet, uint8_t* pdata)
     {
         offset = offSet;
         this->pBurn = pdata;
@@ -211,15 +218,22 @@ public:
         // Color map image descriptor
         VkDescriptorImageInfo texDescriptorColorMap =
             vkTools::initializers::descriptorImageInfo(
-                eTexture[0].sampler,
-                eTexture[0].view,
+                eTexture[0]->sampler,
+                eTexture[0]->view,
                 VK_IMAGE_LAYOUT_GENERAL);
 
         // Burn image descriptor
         VkDescriptorImageInfo texDescriptorBurned =
             vkTools::initializers::descriptorImageInfo(
-                eTexture[1].sampler,
-                eTexture[1].view,
+                eTexture[1]->sampler,
+                eTexture[1]->view,
+                VK_IMAGE_LAYOUT_GENERAL);
+
+        // Burn image descriptor
+        VkDescriptorImageInfo texDescriptorShadow =
+            vkTools::initializers::descriptorImageInfo(
+                eTexture[2]->sampler,
+                eTexture[2]->view,
                 VK_IMAGE_LAYOUT_GENERAL);
 
         std::vector<VkWriteDescriptorSet> writeDescriptorSets =
@@ -241,7 +255,13 @@ public:
                 descriptorSet,
                 VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 2,
-                &texDescriptorBurned)
+                &texDescriptorBurned),
+            // Binding 3 : Fragment shader image sampler
+            vkTools::initializers::writeDescriptorSet(
+                descriptorSet,
+                VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                3,
+                &texDescriptorShadow)
         };
 
         vkUpdateDescriptorSets(device, writeDescriptorSets.size(), writeDescriptorSets.data(), 0, NULL);
@@ -252,6 +272,14 @@ public:
     {
         VkDeviceSize offsets[1] = { 0 };
         vkCmdBindDescriptorSets(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, NULL);
+        vkCmdBindVertexBuffers(cmdbuffer, 0, 1, vertexBuffer, offsets);
+        vkCmdBindIndexBuffer(cmdbuffer, indicesBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdDrawIndexed(cmdbuffer, indices.size(), 1, 0, burnStart, 0);
+    }
+
+    void draw(VkCommandBuffer cmdbuffer, VkBuffer* vertexBuffer)
+    {
+        VkDeviceSize offsets[1] = { 0 };
         vkCmdBindVertexBuffers(cmdbuffer, 0, 1, vertexBuffer, offsets);
         vkCmdBindIndexBuffer(cmdbuffer, indicesBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
         vkCmdDrawIndexed(cmdbuffer, indices.size(), 1, 0, burnStart, 0);

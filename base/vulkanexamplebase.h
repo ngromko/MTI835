@@ -98,10 +98,10 @@ protected:
 	VkCommandPool cmdPool;
 	// Command buffer used for setup
 	VkCommandBuffer setupCmdBuffer = VK_NULL_HANDLE;
-	// Command buffer for submitting a post present image barrier
-	VkCommandBuffer postPresentCmdBuffer = VK_NULL_HANDLE;
-	// Command buffer for submitting a pre present image barrier
-	VkCommandBuffer prePresentCmdBuffer = VK_NULL_HANDLE;
+    // Command buffer for submitting a post present image barrier
+    std::vector<VkCommandBuffer> postPresentCmdBuffers = { VK_NULL_HANDLE };
+    // Command buffers for submitting a pre present image barrier
+    std::vector<VkCommandBuffer> prePresentCmdBuffers = { VK_NULL_HANDLE };
 	// Pipeline stage flags for the submit info structure
 	VkPipelineStageFlags submitPipelineStages = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
 	// Contains command buffers and semaphores to be presented to the queue
@@ -114,12 +114,9 @@ protected:
 	std::vector<VkFramebuffer>frameBuffers;
 	// Active frame buffer index
 	uint32_t currentBuffer = 0;
-	// Descriptor set pool
-	VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
+
 	// List of shader modules created (stored for cleanup)
 	std::vector<VkShaderModule> shaderModules;
-	// Pipeline cache object
-	VkPipelineCache pipelineCache;
 	// Wraps the swap chain to present images (framebuffers) to the windowing system
 	VulkanSwapChain swapChain;
 	// Synchronization semaphores
@@ -133,9 +130,10 @@ protected:
 	} semaphores;
 	// Simple texture loader
 	vkTools::VulkanTextureLoader *textureLoader = nullptr;
-	// Returns the base asset path (for shaders, models, textures) depending on the os
-	const std::string getAssetPath();
-public: 
+    // Returns the base asset path (for shaders, models, textures) depending on the os
+    void buildPresentCommandBuffers();
+public:
+    const std::string getAssetPath();
 	bool prepared = false;
 	uint32_t width = 1280;
 	uint32_t height = 720;
@@ -188,6 +186,11 @@ public:
 			float rz = 0.0f;
 		} axes;
 	} gamePadState;
+
+    // Pipeline cache object
+    VkPipelineCache pipelineCache;
+    // Descriptor set pool
+    VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 
 	// OS specific 
 #if defined(_WIN32)

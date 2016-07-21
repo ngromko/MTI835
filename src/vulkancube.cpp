@@ -22,46 +22,46 @@ void VulkanCube::prepareVertices(glm::vec3 halfSize,std::vector<BurningPoint>& b
 
     // -Y
     Vertex v = { { halfSize.x,-halfSize.y, halfSize.z },{ 1.0, 1.0 }, { 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { -halfSize.x,-halfSize.y,-halfSize.z },{ 0.0, 0.0 },{ 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { halfSize.x,-halfSize.y,-halfSize.z },{ 1.0, 0.0 },{ 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { halfSize.x,-halfSize.y, halfSize.z },{ 1.0, 1.0 },{ 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { -halfSize.x,-halfSize.y, halfSize.z },{ 0.0, 1.0 },{ 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { -halfSize.x,-halfSize.y,-halfSize.z },{ 0.0, 0.0 },{ 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
+    v = { { halfSize.x,-halfSize.y,-halfSize.z },{ 1.0, 0.0 },{ 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
+    v = { { -halfSize.x,-halfSize.y,-halfSize.z },{ 0.0, 0.0 },{ 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
+    v = { { halfSize.x,-halfSize.y, halfSize.z },{ 1.0, 1.0 },{ 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
+    v = { { -halfSize.x,-halfSize.y,-halfSize.z },{ 0.0, 0.0 },{ 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
+    v = { { -halfSize.x,-halfSize.y, halfSize.z },{ 0.0, 1.0 },{ 0.0f, -1.0f, 0.0f }}; vBuffer.push_back(v);
     // +Y
-     v = { { halfSize.x,halfSize.y, halfSize.z },{ 1.0, 1.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { halfSize.x,halfSize.y,-halfSize.z },{ 1.0, 0.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { -halfSize.x,halfSize.y,-halfSize.z },{ 0.0, 0.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { halfSize.x,halfSize.y, halfSize.z },{ 1.0, 1.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { -halfSize.x,halfSize.y,-halfSize.z },{ 0.0, 0.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { -halfSize.x,halfSize.y, halfSize.z },{ 0.0, 1.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
+    v = { { halfSize.x,halfSize.y, halfSize.z },{ 1.0, 1.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
+    v = { { -halfSize.x,halfSize.y,-halfSize.z },{ 0.0, 0.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
+    v = { { halfSize.x,halfSize.y,-halfSize.z },{ 1.0, 0.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
+    v = { { halfSize.x,halfSize.y, halfSize.z },{ 1.0, 1.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
+    v = { { -halfSize.x,halfSize.y, halfSize.z },{ 0.0, 1.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
+    v = { { -halfSize.x,halfSize.y,-halfSize.z },{ 0.0, 0.0 },{ 0.0f, 1.0f, 0.0f }}; vBuffer.push_back(v);
     // -X
-     v = { { -halfSize.x,-halfSize.y,-halfSize.z },{ 0.0, 0.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { -halfSize.x,-halfSize.y, halfSize.z },{ 0.0, 1.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { -halfSize.x,halfSize.y, halfSize.z },{ 1.0, 1.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { -halfSize.x,-halfSize.y,-halfSize.z },{ 0.0, 0.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { -halfSize.x,halfSize.y, halfSize.z },{ 1.0, 1.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { -halfSize.x,halfSize.y,-halfSize.z },{ 1.0, 0.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+    v = { { -halfSize.x,halfSize.y,-halfSize.z },{ 0.0, 1.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+    v = { { -halfSize.x,halfSize.y,halfSize.z },{ 0.0, 0.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+    v = { { -halfSize.x,-halfSize.y,-halfSize.z },{ 1.0, 1.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+    v = { { -halfSize.x,halfSize.y,halfSize.z },{ 0.0, 0.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+    v = { { -halfSize.x,-halfSize.y,halfSize.z },{ 1.0, 0.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+    v = { { -halfSize.x,-halfSize.y,-halfSize.z },{ 1.0, 1.0 },{ -1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
     // +X
-     v = { { halfSize.x,halfSize.y, halfSize.z },{ 1.0, 1.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { halfSize.x,-halfSize.y,-halfSize.z },{ 0.0, 0.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { halfSize.x,halfSize.y,-halfSize.z },{ 1.0, 0.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { halfSize.x,-halfSize.y,-halfSize.z },{ 0.0, 0.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { halfSize.x,halfSize.y, halfSize.z },{ 1.0, 1.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
-     v = { { halfSize.x,-halfSize.y, halfSize.z },{ 0.0, 1.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+    v = { { halfSize.x,halfSize.y, halfSize.z },{ 1.0, 1.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+    v = { { halfSize.x,halfSize.y,-halfSize.z },{ 1.0, 0.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+    v = { { halfSize.x,-halfSize.y,-halfSize.z },{ 0.0, 0.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+    v = { { halfSize.x,halfSize.y,halfSize.z },{ 0.0, 0.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+    v = { { halfSize.x,-halfSize.y, -halfSize.z },{ 0.0, 1.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
+    v = { { halfSize.x,-halfSize.y, halfSize.z },{ 1.0, 1.0 },{ 1.0f, 0.0f, 0.0f }}; vBuffer.push_back(v);
     // -Z
-     v = { { halfSize.x,halfSize.y,-halfSize.z },{ 1.0, 1.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
-     v = { { -halfSize.x,-halfSize.y,-halfSize.z },{ 0.0, 0.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
-     v = { { -halfSize.x,halfSize.y,-halfSize.z },{ 0.0, 1.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
-     v = { { halfSize.x,halfSize.y,-halfSize.z },{ 1.0, 1.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
-     v = { { halfSize.x,-halfSize.y,-halfSize.z },{ 1.0, 0.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
-     v = { { -halfSize.x,-halfSize.y,-halfSize.z },{ 0.0, 0.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
+    v = { { halfSize.x,halfSize.y,-halfSize.z },{ 1.0, 1.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
+    v = { { -halfSize.x,-halfSize.y,-halfSize.z },{ 0.0, 1.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
+    v = { { halfSize.x,-halfSize.y,-halfSize.z },{ 0.0, 0.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
+    v = { { halfSize.x,halfSize.y,-halfSize.z },{ 1.0, 1.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
+    v = { { -halfSize.x,halfSize.y,-halfSize.z },{ 0.0, 0.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
+    v = { { -halfSize.x,-halfSize.y,-halfSize.z },{ 1.0, 0.0 },{ 0.0f, 0.0f, -1.0f }}; vBuffer.push_back(v);
     // +Z
-     v = { { -halfSize.x,halfSize.y, halfSize.z },{ 0.0, 1.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
-     v = { { -halfSize.x,-halfSize.y, halfSize.z },{ 0.0, 0.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
-     v = { { halfSize.x,-halfSize.y, halfSize.z },{ 1.0, 0.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
-     v = { { halfSize.x,halfSize.y, halfSize.z },{ 1.0, 1.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
-     v = { { -halfSize.x,halfSize.y, halfSize.z },{ 0.0, 1.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
-     v = { { halfSize.x,-halfSize.y, halfSize.z },{ 1.0, 0.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
+    v = { { halfSize.x,halfSize.y, halfSize.z },{ 0.0, 1.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
+    v = { { halfSize.x,-halfSize.y, halfSize.z },{ 1.0, 0.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
+    v = { { -halfSize.x,-halfSize.y, halfSize.z },{ 0.0, 0.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
+    v = { { halfSize.x,halfSize.y, halfSize.z },{ 1.0, 1.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
+    v = { { -halfSize.x,-halfSize.y, halfSize.z },{ 1.0, 0.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
+    v = { { -halfSize.x,halfSize.y, halfSize.z },{ 0.0, 1.0 },{ 0.0f, 0.0f, 1.0f }}; vBuffer.push_back(v);
 
     float scalex = (halfSize.x-0.025)/halfSize.x;
     float scaley = (halfSize.y-0.025)/halfSize.y;

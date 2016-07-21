@@ -31,7 +31,7 @@ void VulkanFire::compute(VkCommandBuffer cmdbuffer)
     while(pGroups*512<computeUbo.particleCount){
         pGroups++;
     }
-
+/*
     // Add memory barrier to ensure that the (rendering) vertex shader operations have finished
     // Required as the compute shader will overwrite the vertex buffer data
     VkBufferMemoryBarrier bufferBarrier = vkTools::initializers::bufferMemoryBarrier();
@@ -51,7 +51,7 @@ void VulkanFire::compute(VkCommandBuffer cmdbuffer)
         VK_FLAGS_NONE,
         0, nullptr,
         1, &bufferBarrier,
-        0, nullptr);
+        0, nullptr);*/
 
     vkCmdBindPipeline(cmdbuffer, VK_PIPELINE_BIND_POINT_COMPUTE, propageFire);
     vkCmdBindDescriptorSets(cmdbuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computePipelineLayout, 0, 1, &computeDescriptorSet, 0, 0);
@@ -72,7 +72,7 @@ void VulkanFire::compute(VkCommandBuffer cmdbuffer)
     // Dispatch the compute job
     vkCmdDispatch(cmdbuffer, pGroups, 1, 1);
 
-    // Add memory barrier to ensure that compute shader has finished writing to the buffer
+    /*// Add memory barrier to ensure that compute shader has finished writing to the buffer
     // Without this the (rendering) vertex shader may display incomplete results (partial data from last frame)
     // Compute shader has finished writes to the buffer
     bufferBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
@@ -90,7 +90,7 @@ void VulkanFire::compute(VkCommandBuffer cmdbuffer)
         VK_FLAGS_NONE,
         0, nullptr,
         1, &bufferBarrier,
-        0, nullptr);
+        0, nullptr);*/
 }
 
 void VulkanFire::draw(VkCommandBuffer cmdbuffer)

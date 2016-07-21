@@ -1306,6 +1306,9 @@
       <Unit filename="C:/Users/Nicholas/Documents/GitHub/MTI835/external/bullet3/LinearMath/btVector3.h">
          <Option target="main"/>
       </Unit>
+      <Unit filename="C:/Users/Nicholas/Documents/GitHub/MTI835/headers/Shadow.h">
+         <Option target="main"/>
+      </Unit>
       <Unit filename="C:/Users/Nicholas/Documents/GitHub/MTI835/headers/VulkanCube.h">
          <Option target="main"/>
       </Unit>
@@ -1328,6 +1331,9 @@
          <Option target="main"/>
       </Unit>
       <Unit filename="C:/Users/Nicholas/Documents/GitHub/MTI835/src/particlefire.cpp">
+         <Option target="main"/>
+      </Unit>
+      <Unit filename="C:/Users/Nicholas/Documents/GitHub/MTI835/src/shadow.cpp">
          <Option target="main"/>
       </Unit>
       <Unit filename="C:/Users/Nicholas/Documents/GitHub/MTI835/src/vulkancube.cpp">

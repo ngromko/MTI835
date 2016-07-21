@@ -22,7 +22,6 @@
 
 #include <vulkan/vulkan.h>
 
-#include "vulkanObject.h"
 #include "vulkanexamplebase.h"
 
 #include "btBulletDynamicsCommon.h"
@@ -30,6 +29,7 @@
 #include "vulkancube.h"
 #include "VulkanMesh.h"
 #include "particlefire.h"
+#include "Shadow.h"
 
 #define VERTEX_BUFFER_BIND_ID 0
 #define ENABLE_VALIDATION true
@@ -45,7 +45,10 @@ private:
     vkMeshLoader::MeshBuffer armorMesh;
     vkMeshLoader::MeshBuffer cylinder;
 
-    vkTools::UniformData uniformData;
+    struct {
+        vkTools::UniformData scene;
+        vkTools::UniformData objectsUniforme;
+    } uniformData;
 
     btVector3 m_pickPos;
     btScalar m_pickDist;
@@ -63,6 +66,34 @@ private:
         glm::mat4 projection;
         glm::mat4 view;
     } ubo;
+
+    // Shader properites for a material
+    // Will be passed to the shaders using push constant
+    struct SceneMaterialProperites
+    {
+        glm::vec4 ambient;
+        glm::vec4 diffuse;
+        glm::vec4 specular;
+    };
+
+    // Stores info on the materials used in the scene
+    struct SceneMaterial
+    {
+        std::string name;
+        // Material properties
+        SceneMaterialProperites properties;
+        // The example only uses a diffuse channel
+        vkTools::VulkanTexture diffuse;
+        // The material's descriptor contains the material descriptors
+        VkDescriptorSet descriptorSet;
+        // Pointer to the pipeline used by this material
+        VkPipeline *pipeline;
+    };
+
+    struct Light{
+       glm::vec4 pos;
+
+    };
 
     glm::vec4 getRayTo(float x, float y){
         float fw = (float)width;
@@ -107,19 +138,30 @@ public:
 
     btDiscreteDynamicsWorld* dynamicsWorld;
 
-    vkTools::UniformData objectsUniforme;
-
     std::vector<VulkanObject*> cubes;
     VulkanFire* fire;
+    VkCommandBuffer computeCommand;
+    VkSubmitInfo computeSubmitInfo;
     int stop=0;
-	VkPipelineLayout pipelineLayout;
-	VkDescriptorSet descriptorSet;
+
+    struct {
+        VkPipelineLayout scene;
+    } pipelineLayouts;
+
+    struct {
+        VkDescriptorSet scene;
+    } descriptorSets;
 	VkDescriptorSetLayout descriptorSetLayout;
 
-	struct {
-		VkPipeline texture;
-        VkPipeline fire;
-	} pipelines;
+    struct {
+        VkPipeline scene;
+    } pipelines;
+
+    Shadow* shadow;
+
+    VkSemaphore offscreenSemaphore = VK_NULL_HANDLE;
+    VkSemaphore computeSemaphore = VK_NULL_HANDLE;
+
 
 	VulkanExample() : VulkanExampleBase(ENABLE_VALIDATION)
 	{
@@ -137,16 +179,32 @@ public:
 
         vkDestroySampler(device, textures.sampler, nullptr);
 		
-		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+        //vkDestroyRenderPass(device, FrameBuf.renderPass, nullptr);
+
+        // Pipelibes
+        vkDestroyPipeline(device, pipelines.scene, nullptr);
+        //vkDestroyPipeline(device, pipelines., nullptr);
+
+        vkDestroyPipelineLayout(device, pipelineLayouts.scene, nullptr);
+        //vkDestroyPipelineLayout(device, pipelineLayouts., nullptr);
+
         vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 
         textureLoader->destroyTexture(wood);
         textureLoader->destroyTexture(armorTexture);
-
+        textureLoader->destroyTexture(paper);
+        textureLoader->destroyTexture(burn);
         textureLoader->destroyTexture(textures.smoke);
         textureLoader->destroyTexture(textures.fire);
 
-        vkUnmapMemory(device, objectsUniforme.memory);
+        vkUnmapMemory(device, uniformData.objectsUniforme.memory);
+
+        vkTools::destroyUniformData(device, &uniformData.scene);
+        vkTools::destroyUniformData(device, &uniformData.objectsUniforme);
+
+        vkDestroySemaphore(device, offscreenSemaphore, nullptr);
+        vkDestroySemaphore(device, computeSemaphore, nullptr);
+
 	}
 
     void loadTextures()
@@ -172,7 +230,7 @@ public:
             &armorTexture);
 
         textureLoader->loadTexture(
-                    getAssetPath() + "textures/Parchment.dds",
+                    getAssetPath() + "textures/paper.dds",
             VK_FORMAT_BC3_UNORM_BLOCK,
             &paper);
 
@@ -208,6 +266,20 @@ public:
 
     void buildCommandBuffers()
     {
+
+        computeCommand = createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY,true);
+
+        fire->compute(computeCommand);
+
+        vkEndCommandBuffer(computeCommand);
+
+        computeSubmitInfo = vkTools::initializers::submitInfo();
+        //computeSubmitInfo.pCommandBuffers = &computeCommand;
+        // Create a semaphore used to synchronize offscreen rendering and usage
+        VkSemaphoreCreateInfo semaphoreCreateInfo = vkTools::initializers::semaphoreCreateInfo();
+        VK_CHECK_RESULT(vkCreateSemaphore(device, &semaphoreCreateInfo, nullptr, &offscreenSemaphore));
+        VK_CHECK_RESULT(vkCreateSemaphore(device, &semaphoreCreateInfo, nullptr, &computeSemaphore));
+
         VkCommandBufferBeginInfo cmdBufInfo = vkTools::initializers::commandBufferBeginInfo();
 
         VkClearValue clearValues[2];
@@ -235,8 +307,6 @@ public:
             err = vkBeginCommandBuffer(drawCmdBuffers[i], &cmdBufInfo);
             assert(!err);
 
-            fire->compute(drawCmdBuffers[i]);
-
             vkCmdBeginRenderPass(drawCmdBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
             VkViewport viewport = vkTools::initializers::viewport(
@@ -253,11 +323,11 @@ public:
                 0);
             vkCmdSetScissor(drawCmdBuffers[i], 0, 1, &scissor);
 
-            vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.texture);
+            vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.scene);
 
             for (auto& cube : cubes)
             {
-                cube->draw(drawCmdBuffers[i], pipelineLayout, &bPointsStorageBuffer.buffer);
+                cube->draw(drawCmdBuffers[i], pipelineLayouts.scene, &bPointsStorageBuffer.buffer);
             }
 
             fire->draw(drawCmdBuffers[i]);
@@ -294,29 +364,40 @@ public:
 
 	void draw()
 	{
-		VkResult err;
+        VulkanExampleBase::prepareFrame();
 
-		// Get next image in the swap chain (back/front buffer)
-		err = swapChain.acquireNextImage(semaphores.presentComplete, &currentBuffer);
-		assert(!err);
+        //Shadow Map
+        // Wait for swap chain presentation to finish
+        submitInfo.pWaitSemaphores = &semaphores.presentComplete;
+        submitInfo.pSignalSemaphores = &computeSemaphore;
 
-		submitPostPresentBarrier(swapChain.buffers[currentBuffer].image);
+        // Signal ready with offscreen semaphore
+        submitInfo.commandBufferCount = 1;
+        // Calcul compute shader
+        submitInfo.pCommandBuffers = &computeCommand;
 
-		// Command buffer to be sumitted to the queue
-		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &drawCmdBuffers[currentBuffer];
+        // Submit to queue
+        VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE));
 
-		// Submit to queue
-		err = vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
-		assert(!err);
 
-		submitPrePresentBarrier(swapChain.buffers[currentBuffer].image);
+        // Submit work
+        submitInfo.pWaitSemaphores = &computeSemaphore;
+        submitInfo.pSignalSemaphores = &offscreenSemaphore;
+        submitInfo.pCommandBuffers = shadow->getCommandBuffer();
+        VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE));
 
-		err = swapChain.queuePresent(queue, currentBuffer, semaphores.renderComplete);
-		assert(!err);
+        // Scene rendering
 
-		err = vkQueueWaitIdle(queue);
-		assert(!err);
+        // Wait for offscreen semaphore
+        submitInfo.pWaitSemaphores = &offscreenSemaphore;
+        // Signal ready with render complete semaphpre
+        submitInfo.pSignalSemaphores = &semaphores.renderComplete;
+
+        // Submit work
+        submitInfo.pCommandBuffers = &drawCmdBuffers[currentBuffer];
+        VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE));
+
+        VulkanExampleBase::submitFrame();
 	}
 
 	void prepareVertices()
@@ -327,7 +408,17 @@ public:
 
         uint32_t objectNumber=0;
         std::cout <<" errrrre "<< bPoints.size() << std::endl;
-        cubes.push_back(new VulkanCube(device,this,queue,glm::vec3(15.0,0.1,15.0),cubeModel,false,0,objectNumber++,bPoints));
+        cubes.push_back(new VulkanCube(device,this,queue,glm::vec3(15.0,1.1,15.0),cubeModel,false,0,objectNumber++,bPoints));
+        cubeModel = glm::translate(glm::mat4(),glm::vec3(15.0f,2.0f,5.0f));
+        cubes.push_back(new VulkanCube(device,this,queue,glm::vec3(0.5f,0.5f,0.5f),cubeModel,true,1,objectNumber++,bPoints));
+        cubeModel = glm::translate(glm::mat4(),glm::vec3(-5.0f,2.0f,5.0f));
+        cubes.push_back(new VulkanCube(device,this,queue,glm::vec3(1.0f,1.0f,1.0f),cubeModel,true,2,objectNumber++,bPoints));
+        cubeModel = glm::translate(glm::mat4(),glm::vec3(5.0f,2.0f,15.0f));
+        cubes.push_back(new VulkanCube(device,this,queue,glm::vec3(1.5f,1.5f,1.5f),cubeModel,true,1,objectNumber++,bPoints));
+        cubeModel = glm::translate(glm::mat4(),glm::vec3(5.0f,2.0f,-5.0f));
+        cubes.push_back(new VulkanCube(device,this,queue,glm::vec3(2.0f,2.0f,2.0f),cubeModel,true,2,objectNumber++,bPoints));
+        cubeModel = glm::translate(glm::mat4(),glm::vec3(5.0f,30.0f,5.0f));
+        //cubes.push_back(new VulkanCube(device,this,queue,glm::vec3(15.0,1.1,15.0),cubeModel,false,0,objectNumber++,bPoints));
         /*std::cout <<" geagsres "<< bPoints.size() << std::endl;
         for(int i = 0;i<5;i++){
             for(int j = 0;j<5;j++){
@@ -338,7 +429,7 @@ public:
           }
         }*/
 
-        loadBurningMesh(getAssetPath() + "models/armor/armor.dae", glm::vec3(1.0f,-1.0f,1.0f), &objectNumber);
+        //loadBurningMesh(getAssetPath() + "models/armor/armor.dae", glm::vec3(1.0f,-1.0f,1.0f), &objectNumber);
 
 
         /*std::cout<<"allossize " << allo.size()<<std::endl;
@@ -436,7 +527,7 @@ std::cout<< "alloc burning " << sizeof(BurningPoint)<<std::endl;
             vkTools::initializers::vertexInputAttributeDescription(
                 VERTEX_BUFFER_BIND_ID,
                 0,
-                VK_FORMAT_R32G32B32A32_SFLOAT,
+                VK_FORMAT_R32G32B32_SFLOAT,
                 0);
         // Location 1 : Normal
         vertices.attributeDescriptions[1] =
@@ -506,7 +597,12 @@ std::cout<< "alloc burning " << sizeof(BurningPoint)<<std::endl;
             vkTools::initializers::descriptorSetLayoutBinding(
                 VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 VK_SHADER_STAGE_FRAGMENT_BIT,
-                2)
+                2),
+            // Binding 3 : Shadow maps
+            vkTools::initializers::descriptorSetLayoutBinding(
+                VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                VK_SHADER_STAGE_FRAGMENT_BIT,
+                3)
         };
 
 		VkDescriptorSetLayoutCreateInfo descriptorLayout =
@@ -525,7 +621,7 @@ std::cout<<"create"<<std::endl;
 
         std::cout<<"create"<<std::endl;
 
-		err = vkCreatePipelineLayout(device, &pPipelineLayoutCreateInfo, nullptr, &pipelineLayout);
+        err = vkCreatePipelineLayout(device, &pPipelineLayoutCreateInfo, nullptr, &pipelineLayouts.scene);
 		assert(!err);
         std::cout<<"crea2te"<<std::endl;
 
@@ -545,27 +641,27 @@ std::cout<<"create"<<std::endl;
                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
                 size,
                 nullptr,
-                &objectsUniforme.buffer,
-                &objectsUniforme.memory,
-                &objectsUniforme.descriptor);
+                &uniformData.objectsUniforme.buffer,
+                &uniformData.objectsUniforme.memory,
+                &uniformData.objectsUniforme.descriptor);
 
             uint32_t offset =0;
             uint8_t* pData;
 
-            VkResult err = vkMapMemory(device, objectsUniforme.memory, 0, size, 0, (void **)&pData);
+            VkResult err = vkMapMemory(device, uniformData.objectsUniforme.memory, 0, size, 0, (void **)&pData);
             assert(!err);
 
-            vkTools::VulkanTexture texs[2] = {armorTexture,burn};
+            vkTools::VulkanTexture* texs[3] = {&paper,&burn,shadow->getCubeMapTexture()};
 
             for (auto& cube : cubes)
             {
                 std::cout<<"test "<< offset<<std::endl;
-                cube->setupDescriptorSet(descriptorPool, descriptorSetLayout,&uniformData.descriptor,texs,offset ,pData);
+                cube->setupDescriptorSet(descriptorPool, descriptorSetLayout,&uniformData.scene.descriptor,texs,offset ,pData);
                 offset+=16*4;
             }
         }
 
-        VkDescriptorBufferInfo infos[3] = {bPointsStorageBuffer.descriptor,objectsUniforme.descriptor,uniformData.descriptor};
+        VkDescriptorBufferInfo infos[3] = {bPointsStorageBuffer.descriptor,uniformData.objectsUniforme.descriptor,uniformData.scene.descriptor};
         fire->init(queue,cmdPool,renderPass,descriptorPool, infos,bPoints.size(), textures.sampler,textures.fire,textures.smoke,getAssetPath());
     }
 
@@ -580,7 +676,7 @@ std::cout<<"create"<<std::endl;
         VkPipelineRasterizationStateCreateInfo rasterizationState =
             vkTools::initializers::pipelineRasterizationStateCreateInfo(
                 VK_POLYGON_MODE_FILL,
-                VK_CULL_MODE_NONE,
+                VK_CULL_MODE_BACK_BIT,
                 VK_FRONT_FACE_CLOCKWISE,
                 0);
 
@@ -621,13 +717,14 @@ std::cout<<"create"<<std::endl;
         // Color pipeline
         // Load shaders
         std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages;
+        std::cout<<"shaderload1"<<std::endl;
 
         shaderStages[0] = loadShader(getAssetPath() + "shaders/pipelines/base.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
         shaderStages[1] = loadShader(getAssetPath() + "shaders/pipelines/texture.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
-
+std::cout<<"shaderload2"<<std::endl;
         VkGraphicsPipelineCreateInfo pipelineCreateInfo =
             vkTools::initializers::pipelineCreateInfo(
-                pipelineLayout,
+                pipelineLayouts.scene,
                 renderPass,
                 0);
 
@@ -641,25 +738,30 @@ std::cout<<"create"<<std::endl;
         pipelineCreateInfo.pDynamicState = &dynamicState;
         pipelineCreateInfo.stageCount = shaderStages.size();
         pipelineCreateInfo.pStages = shaderStages.data();
+        std::cout<<"shaderloada"<<std::endl;
 
-        VkResult err = vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipelines.texture);
+        VkResult err = vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipelines.scene);
         assert(!err);
+        std::cout<<"shaderload3"<<std::endl;
+
     }
 
     void prepareUniformBuffer()
     {
-       createBuffer(
+        createBuffer(
            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
            sizeof(ubo),
            &ubo,
-           &uniformData.buffer,
-           &uniformData.memory,
-           &uniformData.descriptor);
+           &uniformData.scene.buffer,
+           &uniformData.scene.memory,
+           &uniformData.scene.descriptor);
     }
 
 	void updateUniformBuffers()
 	{
         ubo.projection = glm::perspective(glm::radians(60.0f), (float)(width) / (float)height, 0.1f, 256.0f);
+        //ubo.projection = glm::perspective((float)(M_PI / 2.0), 1.0f, 0.1f,1024.0f);
+
         glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, -zoom),glm::vec3(0,0,0),glm::vec3(0,1,0));
         //view = glm::lookAtLH(glm::vec3(0.0f, 0.0f, zoom),glm::vec3(0,0,0),glm::vec3(0,-1,0));
         view = glm::scale(view,glm::vec3(1,-1,1));
@@ -669,17 +771,25 @@ std::cout<<"create"<<std::endl;
         view = glm::rotate(view, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
         view = glm::rotate(view, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
 
+        //view = glm::scale(glm::mat4(),glm::vec3(1,-1,1));
+        //view = glm::rotate(view, glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        //ubo.view = glm::translate(view,glm::vec3(-5.0f,zoom,-5.0f));
         ubo.view = glm::translate(view,glm::vec3(-5.0f,0.0f,-5.0f));
 
         uint8_t *pData;
-        VkResult err = vkMapMemory(device, uniformData.memory, 0, sizeof(ubo), 0, (void **)&pData);
+        VkResult err = vkMapMemory(device, uniformData.scene.memory, 0, sizeof(ubo), 0, (void **)&pData);
         assert(!err);
         memcpy(pData, &ubo, sizeof(ubo));
-        vkUnmapMemory(device, uniformData.memory);
+        vkUnmapMemory(device, uniformData.scene.memory);
     }
 
 	void prepare()
 	{
+        VkFormat fbDepthFormat;
+        // Find a suitable depth format
+        VkBool32 validDepthFormat = vkTools::getSupportedDepthFormat(physicalDevice, &fbDepthFormat);
+        assert(validDepthFormat);
+
 		VulkanExampleBase::prepare();
         loadTextures();std::cout<<"bumbo"<<std::endl;
         prepareVertices();std::cout<<"bumbo1"<<std::endl;
@@ -688,8 +798,10 @@ std::cout<<"create"<<std::endl;
         setupDescriptorSetLayout();std::cout<<"bumbo2"<<std::endl;
         preparePipelinesCubes();std::cout<<"bumbo3"<<std::endl;
         setupDescriptorPool();std::cout<<"bumbo4"<<std::endl;
+        shadow = new Shadow(device,queue,renderPass,fbDepthFormat,this,2,&vertices.inputState);
         setupDescriptorSets();std::cout<<"bumbo5"<<std::endl;
         buildCommandBuffers();std::cout<<"bumbo6"<<std::endl;
+        shadow->buildOffscreenCommandBuffer(cubes,&bPointsStorageBuffer.buffer,2);
         buildBulletScene();std::cout<<"bumbo7"<<std::endl;
 
         updateUniformBuffers();std::cout<<"bumbo8"<<std::endl;
@@ -698,13 +810,15 @@ std::cout<<"create"<<std::endl;
 
 	virtual void render()
     {
-        if (!prepared)
+
+        if (!prepared || stop>2)
             return;
         dynamicsWorld->stepSimulation(frameTimer);
         fire->updateTime(frameTimer);
 		vkDeviceWaitIdle(device);
         draw();
 		vkDeviceWaitIdle(device);
+        //stop++;
 	}
 
 	virtual void viewChanged()
@@ -831,11 +945,8 @@ std::cout<<"create"<<std::endl;
                 bPoints.push_back(bp);
 
             }
-            glm::mat4 bob = glm::translate(glm::mat4(),glm::vec3(5,13,5));
+            glm::mat4 bob = glm::translate(glm::mat4(),glm::vec3(2,6,2));
             cubes.push_back(new VulkanMesh(device,this,queue,mesh->m_Entries[i].Indices,true,bob,1,*objectNumber,burnStart,bPoints));
-
-            std::cout << "test size "<< bPoints[4000].life.x<<std::endl;
-
         }
     }
 };

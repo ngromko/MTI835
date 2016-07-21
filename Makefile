@@ -5605,6 +5605,33 @@ src\particlefire.cpp.s:
 	$(MAKE) -f CMakeFiles\main.dir\build.make /nologo -$(MAKEFLAGS) CMakeFiles\main.dir\src\particlefire.cpp.s
 .PHONY : src\particlefire.cpp.s
 
+src\shadow.obj: src\shadow.cpp.obj
+
+.PHONY : src\shadow.obj
+
+# target to build an object file
+src\shadow.cpp.obj:
+	$(MAKE) -f CMakeFiles\main.dir\build.make /nologo -$(MAKEFLAGS) CMakeFiles\main.dir\src\shadow.cpp.obj
+.PHONY : src\shadow.cpp.obj
+
+src\shadow.i: src\shadow.cpp.i
+
+.PHONY : src\shadow.i
+
+# target to preprocess a source file
+src\shadow.cpp.i:
+	$(MAKE) -f CMakeFiles\main.dir\build.make /nologo -$(MAKEFLAGS) CMakeFiles\main.dir\src\shadow.cpp.i
+.PHONY : src\shadow.cpp.i
+
+src\shadow.s: src\shadow.cpp.s
+
+.PHONY : src\shadow.s
+
+# target to generate assembly for a file
+src\shadow.cpp.s:
+	$(MAKE) -f CMakeFiles\main.dir\build.make /nologo -$(MAKEFLAGS) CMakeFiles\main.dir\src\shadow.cpp.s
+.PHONY : src\shadow.cpp.s
+
 src\vulkancube.obj: src\vulkancube.cpp.obj
 
 .PHONY : src\vulkancube.obj
@@ -6277,6 +6304,9 @@ help:
 	@echo ... src/particlefire.obj
 	@echo ... src/particlefire.i
 	@echo ... src/particlefire.s
+	@echo ... src/shadow.obj
+	@echo ... src/shadow.i
+	@echo ... src/shadow.s
 	@echo ... src/vulkancube.obj
 	@echo ... src/vulkancube.i
 	@echo ... src/vulkancube.s
