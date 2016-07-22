@@ -27,8 +27,12 @@ out gl_PerVertex
  
 void main()
 {
-	gl_Position = ubo.projection * pushConsts.view * vec4(inPos, 1.0);
+    vec3 lights[2];
+    lights[0] = vec3(5.0f,10.0f,0.0f);
+    lights[1] = vec3(5.0f,10.0f,0.0f);
+    
+	gl_Position = ubo.projection * pushConsts.view * vec4(inPos-lights[pushConsts.lightIndex], 1.0);
 
 	outPos = inPos;	
-	outLightPos = ubo.lightPos[pushConsts.lightIndex].xyz; 
+	outLightPos = lights[pushConsts.lightIndex]; 
 }

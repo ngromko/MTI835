@@ -74,10 +74,10 @@ private:
         uint32_t lightIndex;
     }pCostant;
 
-    VkCommandBuffer offScreenCmdBuffer = VK_NULL_HANDLE;
+    //VkCommandBuffer offScreenCmdBuffer = VK_NULL_HANDLE;
     VkFormat fbDepthFormat;
 
-    void Shadow::prepareCubeMap(VkQueue queue, VkRenderPass renderPass, uint32_t lightCount);
+    void Shadow::prepareCubeMap(VkQueue queue);
     void prepareOffscreenFramebuffer(VkQueue queue);
     void prepareOffscreenRenderpass();
     void prepareUniformBuffers();
@@ -85,12 +85,14 @@ private:
     void preparePipeline(VkPipelineVertexInputStateCreateInfo *verticesState);
     void setupDescriptorSetLayout();
     void setupDescriptorSets();
+    void updateCubeFace(VkCommandBuffer offScreenCmdBuffer, uint32_t faceIndex, uint32_t light, std::vector<VulkanObject *> objects, VkBuffer *points);
 public:
     ~Shadow();
     vkTools::VulkanTexture *getCubeMapTexture();
     void buildOffscreenCommandBuffer(std::vector<VulkanObject *> objects, VkBuffer *points, uint32_t lightCount);
 
-    Shadow(VkDevice edevice, VkQueue queue, VkRenderPass renderpass, VkFormat depthFormat, VulkanExampleBase *mainClass, uint32_t lightCount, VkPipelineVertexInputStateCreateInfo *verticesState);
     VkCommandBuffer *getCommandBuffer();
+    void buildOffscreenCommandBuffer(VkCommandBuffer offScreenCmdBuffer, std::vector<VulkanObject *> objects, VkBuffer *points, uint32_t lightIndex);
+    Shadow(VkDevice edevice, VkQueue queue, VkRenderPass renderpass, VkFormat depthFormat, VulkanExampleBase *mainClass, VkPipelineVertexInputStateCreateInfo *verticesState);
 };
 

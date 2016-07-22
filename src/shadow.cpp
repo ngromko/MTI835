@@ -4,10 +4,10 @@ Gère les ombres pour la scène
 
 #include "Shadow.h"
 
-Shadow::Shadow(VkDevice edevice, VkQueue queue, VkRenderPass renderpass, VkFormat depthFormat, VulkanExampleBase* mainClass, uint32_t lightCount,VkPipelineVertexInputStateCreateInfo* verticesState):exampleBase(mainClass),device(edevice),fbDepthFormat(depthFormat)
+Shadow::Shadow(VkDevice edevice, VkQueue queue, VkRenderPass renderpass, VkFormat depthFormat, VulkanExampleBase* mainClass,VkPipelineVertexInputStateCreateInfo* verticesState):exampleBase(mainClass),device(edevice),fbDepthFormat(depthFormat)
 {
     prepareUniformBuffers();
-    prepareCubeMap(queue,renderpass,lightCount);
+    prepareCubeMap(queue);
     setupDescriptorSetLayout();
     prepareOffscreenRenderpass();
     preparePipeline(verticesState);
@@ -48,7 +48,7 @@ Shadow::~Shadow()
     vkDestroyFramebuffer(device, offScreenFrameBuf.frameBuffer, nullptr);
 }
 
-void Shadow::prepareCubeMap(VkQueue queue, VkRenderPass renderPass, uint32_t lightCount)
+void Shadow::prepareCubeMap(VkQueue queue)
 {
     shadowCubeMap.width = TEX_DIM;
     shadowCubeMap.height = TEX_DIM;
@@ -62,7 +62,7 @@ void Shadow::prepareCubeMap(VkQueue queue, VkRenderPass renderPass, uint32_t lig
     imageCreateInfo.format = format;
     imageCreateInfo.extent = { shadowCubeMap.width, shadowCubeMap.height, 1 };
     imageCreateInfo.mipLevels = 1;
-    imageCreateInfo.arrayLayers = 6*lightCount;
+    imageCreateInfo.arrayLayers = 6;
     imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
     imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     imageCreateInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
@@ -90,7 +90,7 @@ void Shadow::prepareCubeMap(VkQueue queue, VkRenderPass renderPass, uint32_t lig
     subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     subresourceRange.baseMipLevel = 0;
     subresourceRange.levelCount = 1;
-    subresourceRange.layerCount = 6*lightCount;
+    subresourceRange.layerCount = 6;
     vkTools::setImageLayout(
         layoutCmd,
         shadowCubeMap.image,
@@ -120,11 +120,11 @@ void Shadow::prepareCubeMap(VkQueue queue, VkRenderPass renderPass, uint32_t lig
     // Create image view
     VkImageViewCreateInfo view = vkTools::initializers::imageViewCreateInfo();
     view.image = VK_NULL_HANDLE;
-    view.viewType = VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
+    view.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
     view.format = format;
     view.components = { VK_COMPONENT_SWIZZLE_R };
     view.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
-    view.subresourceRange.layerCount = 6*lightCount;
+    view.subresourceRange.layerCount = 6;
     view.image = shadowCubeMap.image;
     VK_CHECK_RESULT(vkCreateImageView(device, &view, nullptr, &shadowCubeMap.view));
 }
@@ -243,7 +243,7 @@ void Shadow::prepareOffscreenFramebuffer(VkQueue queue)
 // a copy from framebuffer to cube face
 // Uses push constants for quick update of
 // view matrix for the current cube map face
-void Shadow::updateCubeFace(uint32_t faceIndex, uint32_t light, std::vector<VulkanObject*> objects, VkBuffer* points)
+void Shadow::updateCubeFace(VkCommandBuffer offScreenCmdBuffer, uint32_t faceIndex, uint32_t light, std::vector<VulkanObject*> objects, VkBuffer* points)
 {
 
 
@@ -272,8 +272,6 @@ void Shadow::updateCubeFace(uint32_t faceIndex, uint32_t light, std::vector<Vulk
         pCostant.viewMatrix = glm::rotate(pCostant.viewMatrix, glm::radians(180.0f), glm::vec3(0.0f, 1.0f, 0.0f));
         break;
     }
-
-    pCostant.viewMatrix = glm::translate(pCostant.viewMatrix,-uboOffscreenVS.lightPos[light]);
 
     // Render scene from cube face's point of view
     vkCmdBeginRenderPass(offScreenCmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
@@ -344,13 +342,13 @@ void Shadow::updateCubeFace(uint32_t faceIndex, uint32_t light, std::vector<Vulk
 }
 
 // Command buffer for rendering and copying all cube map faces
-void Shadow::buildOffscreenCommandBuffer(std::vector<VulkanObject*> objects, VkBuffer* points, uint32_t lightCount)
+void Shadow::buildOffscreenCommandBuffer(VkCommandBuffer offScreenCmdBuffer, std::vector<VulkanObject*> objects, VkBuffer* points, uint32_t lightIndex)
 {
-    offScreenCmdBuffer = exampleBase->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY,false);
+    //offScreenCmdBuffer = exampleBase->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY,false);
 
-    VkCommandBufferBeginInfo cmdBufInfo = vkTools::initializers::commandBufferBeginInfo();
+    //VkCommandBufferBeginInfo cmdBufInfo = vkTools::initializers::commandBufferBeginInfo();
 
-    VK_CHECK_RESULT(vkBeginCommandBuffer(offScreenCmdBuffer, &cmdBufInfo));
+    //VK_CHECK_RESULT(vkBeginCommandBuffer(offScreenCmdBuffer, &cmdBufInfo));
 
     VkViewport viewport = vkTools::initializers::viewport((float)offScreenFrameBuf.width, (float)offScreenFrameBuf.height, 0.0f, 1.0f);
     vkCmdSetViewport(offScreenCmdBuffer, 0, 1, &viewport);
@@ -362,7 +360,7 @@ void Shadow::buildOffscreenCommandBuffer(std::vector<VulkanObject*> objects, VkB
     subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     subresourceRange.baseMipLevel = 0;
     subresourceRange.levelCount = 1;
-    subresourceRange.layerCount = 6*lightCount;
+    subresourceRange.layerCount = 6;
 
     // Change image layout for all cubemap faces to transfer destination
     vkTools::setImageLayout(
@@ -373,13 +371,12 @@ void Shadow::buildOffscreenCommandBuffer(std::vector<VulkanObject*> objects, VkB
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         subresourceRange);
 
-    for (uint32_t light = 0; light < lightCount; ++light)
+
+    for (uint32_t face = 0; face < 6; ++face)
     {
-        for (uint32_t face = 0; face < 6; ++face)
-        {
-            updateCubeFace(face,light,objects,points);
-        }
+        updateCubeFace(offScreenCmdBuffer,face,lightIndex,objects,points);
     }
+
 
     // Change image layout for all cubemap faces to shader read after they have been copied
     vkTools::setImageLayout(
@@ -390,7 +387,7 @@ void Shadow::buildOffscreenCommandBuffer(std::vector<VulkanObject*> objects, VkB
         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         subresourceRange);
 
-    VK_CHECK_RESULT(vkEndCommandBuffer(offScreenCmdBuffer));
+    //VK_CHECK_RESULT(vkEndCommandBuffer(offScreenCmdBuffer));
 }
 
 // Set up a separate render pass for the offscreen frame buffer
@@ -598,7 +595,7 @@ void Shadow::setupDescriptorSets()
     vkUpdateDescriptorSets(device, offScreenWriteDescriptorSets.size(), offScreenWriteDescriptorSets.data(), 0, NULL);
 }
 
-VkCommandBuffer* Shadow::getCommandBuffer(){
+/*VkCommandBuffer* Shadow::getCommandBuffer(){
     return &offScreenCmdBuffer;
-}
+}*/
 

@@ -19,7 +19,7 @@ void main()
     lights[0] = vec3(5.0f,10.0f,0.0f);
     lights[1] = vec3(5.0f,10.0f,0.0f);
     
-    outFragColor = vec4(0.01f);
+    outFragColor = vec4(0.1f,0.1f,0.1f,1.0f);
     
 	vec3 N = normalize(inNormal);
     
@@ -30,16 +30,17 @@ void main()
     //for(uint i=0;i<2;i++){
     uint i=0;
         // Shadow
-        vec3 lightVec = vec3(worldPos - lights[i]);
+        vec3 lightVec = vec3(worldPos - lights[0]);
         vec3 L = normalize(-lightVec);
-        float sampledDist = texture(shadowMaps, vec4(lightVec,0)).r;
+        float sampledDist = texture(shadowMaps, vec4(lightVec,i)).r;
         float dist = length(lightVec);
 
         // Check if fragment is in shadow
         if(dist <= sampledDist + EPSILON){
-            outFragColor.rgb += max(dot(N,L), 0.3) * color;
+            outFragColor.rgb += max(dot(N,L), 0.1) * color;
         }
-    //}  
-    //outFragColor.r=sampledDist;
+    //}
+        outFragColor.rgb*=0.5;
+    /*outFragColor.x=dist/10.0f;outFragColor.z = sampledDist/15.0f;*/
 }
   

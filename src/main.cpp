@@ -90,6 +90,8 @@ private:
         VkPipeline *pipeline;
     };
 
+    std::vector<glm::vec4> lights;
+
     struct Light{
        glm::vec4 pos;
 
@@ -155,6 +157,7 @@ public:
 
     struct {
         VkPipeline scene;
+        VkPipeline blend;
     } pipelines;
 
     Shadow* shadow;
@@ -168,6 +171,7 @@ public:
 		zoom = -5.0f;
         rotation = glm::vec3(0.0f, 0.0f, 0.0f);
 		title = "Vulkan Example - Using pipelines";
+        lights.push_back(glm::vec4(5.0f,10.0f,0.0f,1.0f));
 	}
 
 	~VulkanExample()
@@ -321,13 +325,42 @@ public:
                 height,
                 0,
                 0);
-            vkCmdSetScissor(drawCmdBuffers[i], 0, 1, &scissor);
 
+
+            vkCmdEndRenderPass(drawCmdBuffers[i]);
+
+            renderPassBeginInfo.clearValueCount = 0;
+            renderPassBeginInfo.pClearValues = VK_NULL_HANDLE;
+
+            shadow->buildOffscreenCommandBuffer(drawCmdBuffers[i],cubes,&bPointsStorageBuffer.buffer,0);
+
+            vkCmdSetViewport(drawCmdBuffers[i], 0, 1, &viewport);
+            vkCmdSetScissor(drawCmdBuffers[i], 0, 1, &scissor);
             vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.scene);
+
+            vkCmdBeginRenderPass(drawCmdBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
             for (auto& cube : cubes)
             {
                 cube->draw(drawCmdBuffers[i], pipelineLayouts.scene, &bPointsStorageBuffer.buffer);
+            }
+
+            for(int j=1;j<2;j++){
+
+                vkCmdEndRenderPass(drawCmdBuffers[i]);
+
+                shadow->buildOffscreenCommandBuffer(drawCmdBuffers[i],cubes,&bPointsStorageBuffer.buffer,0);
+
+                vkCmdBeginRenderPass(drawCmdBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+                vkCmdSetViewport(drawCmdBuffers[i], 0, 1, &viewport);
+                vkCmdSetScissor(drawCmdBuffers[i], 0, 1, &scissor);
+                vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.blend);
+
+                for (auto& cube : cubes)
+                {
+                    cube->draw(drawCmdBuffers[i], pipelineLayouts.scene, &bPointsStorageBuffer.buffer);
+                }
             }
 
             fire->draw(drawCmdBuffers[i]);
@@ -380,16 +413,16 @@ public:
         VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE));
 
 
-        // Submit work
+        /*// Submit work
         submitInfo.pWaitSemaphores = &computeSemaphore;
         submitInfo.pSignalSemaphores = &offscreenSemaphore;
         submitInfo.pCommandBuffers = shadow->getCommandBuffer();
-        VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE));
+        VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE));*/
 
         // Scene rendering
 
         // Wait for offscreen semaphore
-        submitInfo.pWaitSemaphores = &offscreenSemaphore;
+        submitInfo.pWaitSemaphores = &computeSemaphore;
         // Signal ready with render complete semaphpre
         submitInfo.pSignalSemaphores = &semaphores.renderComplete;
 
@@ -742,6 +775,18 @@ std::cout<<"shaderload2"<<std::endl;
 
         VkResult err = vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipelines.scene);
         assert(!err);
+
+        // Additive blending
+        blendAttachmentState.colorWriteMask = 0xF;
+        blendAttachmentState.blendEnable = VK_TRUE;
+        blendAttachmentState.colorBlendOp = VK_BLEND_OP_ADD;
+        blendAttachmentState.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+        blendAttachmentState.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+        blendAttachmentState.alphaBlendOp = VK_BLEND_OP_MAX;
+        blendAttachmentState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        blendAttachmentState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+
+        vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipelines.blend);
         std::cout<<"shaderload3"<<std::endl;
 
     }
@@ -798,10 +843,9 @@ std::cout<<"shaderload2"<<std::endl;
         setupDescriptorSetLayout();std::cout<<"bumbo2"<<std::endl;
         preparePipelinesCubes();std::cout<<"bumbo3"<<std::endl;
         setupDescriptorPool();std::cout<<"bumbo4"<<std::endl;
-        shadow = new Shadow(device,queue,renderPass,fbDepthFormat,this,2,&vertices.inputState);
+        shadow = new Shadow(device,queue,renderPass,fbDepthFormat,this,&vertices.inputState);
         setupDescriptorSets();std::cout<<"bumbo5"<<std::endl;
         buildCommandBuffers();std::cout<<"bumbo6"<<std::endl;
-        shadow->buildOffscreenCommandBuffer(cubes,&bPointsStorageBuffer.buffer,2);
         buildBulletScene();std::cout<<"bumbo7"<<std::endl;
 
         updateUniformBuffers();std::cout<<"bumbo8"<<std::endl;
