@@ -4,28 +4,15 @@ Gère les ombres pour la scène
 
 #include "Shadow.h"
 
-Shadow::Shadow(VkDevice edevice, VkQueue queue, VkRenderPass renderpass, VkFormat depthFormat, VulkanExampleBase* mainClass,VkPipelineVertexInputStateCreateInfo* verticesState):exampleBase(mainClass),device(edevice),fbDepthFormat(depthFormat)
+Shadow::Shadow(VkDevice edevice, VkQueue queue, VkDescriptorBufferInfo* lights, VkFormat depthFormat, VulkanExampleBase* mainClass,VkPipelineVertexInputStateCreateInfo* verticesState):exampleBase(mainClass),device(edevice),fbDepthFormat(depthFormat)
 {
     prepareUniformBuffers();
     prepareCubeMap(queue);
     setupDescriptorSetLayout();
     prepareOffscreenRenderpass();
     preparePipeline(verticesState);
-    setupDescriptorSets();
+    setupDescriptorSets(lights);
     prepareOffscreenFramebuffer(queue);
-
-    VkClearValue clearValues[2];
-    clearValues[0].color = { { 90.0f,90.0f, 90.0f, 91.0f } };
-    clearValues[1].depthStencil = { 91.0f, 90 };
-
-    renderPassBeginInfo = vkTools::initializers::renderPassBeginInfo();
-    // Reuse render pass from example pass
-    renderPassBeginInfo.renderPass = renderpass;
-    renderPassBeginInfo.framebuffer = offScreenFrameBuf.frameBuffer;
-    renderPassBeginInfo.renderArea.extent.width = offScreenFrameBuf.width;
-    renderPassBeginInfo.renderArea.extent.height = offScreenFrameBuf.height;
-    renderPassBeginInfo.clearValueCount = 2;
-    renderPassBeginInfo.pClearValues = clearValues;
 }
 
 vkTools::VulkanTexture* Shadow::getCubeMapTexture()
@@ -249,7 +236,7 @@ void Shadow::updateCubeFace(VkCommandBuffer offScreenCmdBuffer, uint32_t faceInd
 
     // Update view matrix via push constant
     pCostant.viewMatrix = glm::scale(glm::mat4(),glm::vec3(-1,-1,1));
-    pCostant.lightIndex=light;
+    pCostant.lightIndex.x=light;
 
     switch (faceIndex)
     {
@@ -273,17 +260,32 @@ void Shadow::updateCubeFace(VkCommandBuffer offScreenCmdBuffer, uint32_t faceInd
         break;
     }
 
+    VkClearValue clearValues[2];
+    clearValues[0].color = { { 0.0f,0.0f, 0.0f, 1.0f } };
+    clearValues[1].depthStencil = { 1.0f, 0 };
+
+    renderPassBeginInfo = vkTools::initializers::renderPassBeginInfo();
+    // Reuse render pass from example pass
+    renderPassBeginInfo.renderPass = exampleBase->renderPass;
+    renderPassBeginInfo.framebuffer = offScreenFrameBuf.frameBuffer;
+    renderPassBeginInfo.renderArea.extent.width = offScreenFrameBuf.width;
+    renderPassBeginInfo.renderArea.extent.height = offScreenFrameBuf.height;
+    renderPassBeginInfo.clearValueCount = 2;
+    renderPassBeginInfo.pClearValues = clearValues;
+
     // Render scene from cube face's point of view
     vkCmdBeginRenderPass(offScreenCmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
     // Update shader push constant block
     // Contains current face view matrix
-    vkCmdPushConstants(
+
+    //std::cout<< "pcojaefg "<< pCostant.lightIndex << std::endl;
+                vkCmdPushConstants(
         offScreenCmdBuffer,
         shadowPipelineLayout,
         VK_SHADER_STAGE_VERTEX_BIT,
         0,
-        sizeof(glm::mat4)+4,
+        sizeof(PConst),
         &pCostant);
 
     vkCmdBindPipeline(offScreenCmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shadowPipeline);
@@ -312,8 +314,7 @@ void Shadow::updateCubeFace(VkCommandBuffer offScreenCmdBuffer, uint32_t faceInd
     copyRegion.srcOffset = { 0, 0, 0 };
 
     copyRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    copyRegion.dstSubresource.baseArrayLayer = faceIndex+light*6;
-    std::cout<<"faceindeix " << faceIndex+light*6 << " " << light << std::endl;
+    copyRegion.dstSubresource.baseArrayLayer = faceIndex;
     copyRegion.dstSubresource.mipLevel = 0;
     copyRegion.dstSubresource.layerCount = 1;
     copyRegion.dstOffset = { 0, 0, 0 };
@@ -443,7 +444,7 @@ void Shadow::prepareOffscreenRenderpass()
 // Prepare and initialize uniform buffer containing shader uniforms
 void Shadow::prepareUniformBuffers()
 {
-    uboOffscreenVS.projection = glm::perspective((float)(M_PI / 2.0), 1.0f, 30.0f, zFar);
+    uboOffscreenVS.projection = glm::perspective((float)(M_PI / 2.0), 1.0f, 300.0f, zFar);
 
     uboOffscreenVS.lightPos[0] = glm::vec3(5.0f,10.0f,0.0f);
     uboOffscreenVS.lightPos[1] = glm::vec3(5.0f,10.0f,0.0f);
@@ -542,6 +543,11 @@ void Shadow::setupDescriptorSetLayout()
             VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             VK_SHADER_STAGE_VERTEX_BIT,
             0),
+        // Binding 1 : Vertex shader storage buffer
+        vkTools::initializers::descriptorSetLayoutBinding(
+            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            VK_SHADER_STAGE_VERTEX_BIT,
+            1)
     };
 
     VkDescriptorSetLayoutCreateInfo descriptorLayout =
@@ -562,7 +568,7 @@ void Shadow::setupDescriptorSetLayout()
     VkPushConstantRange pushConstantRange =
         vkTools::initializers::pushConstantRange(
             VK_SHADER_STAGE_VERTEX_BIT,
-            sizeof(glm::mat4)+4,
+            sizeof(PConst),
             0);
 
     // Push constant ranges are part of the pipeline layout
@@ -572,7 +578,7 @@ void Shadow::setupDescriptorSetLayout()
     VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pPipelineLayoutCreateInfo, nullptr, &shadowPipelineLayout));
 }
 
-void Shadow::setupDescriptorSets()
+void Shadow::setupDescriptorSets(VkDescriptorBufferInfo* lights)
 {
     VkDescriptorSetAllocateInfo allocInfo =
         vkTools::initializers::descriptorSetAllocateInfo(
@@ -591,6 +597,12 @@ void Shadow::setupDescriptorSets()
             VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             0,
             &offscreen.descriptor),
+        // Binding 1 : Vertex shader uniform buffer
+        vkTools::initializers::writeDescriptorSet(
+            descSet,
+            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            1,
+            lights)
     };
     vkUpdateDescriptorSets(device, offScreenWriteDescriptorSets.size(), offScreenWriteDescriptorSets.data(), 0, NULL);
 }

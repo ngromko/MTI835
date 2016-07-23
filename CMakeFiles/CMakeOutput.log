@@ -214,3 +214,81 @@ int main(int argc, char** argv)
 #endif
 }
 
+Determining if the CL_VERSION_1_2 exist passed with the following output:
+Change Dir: C:/Users/Nicholas/Documents/GitHub/MTI835/CMakeFiles/CMakeTmp
+
+Run Build Command:"nmake" "/NOLOGO" "cmTC_1d989\fast"
+	"C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\BIN\nmake.exe" -f CMakeFiles\cmTC_1d989.dir\build.make /nologo -L                  CMakeFiles\cmTC_1d989.dir\build
+Building C object CMakeFiles/cmTC_1d989.dir/CheckSymbolExists.c.obj
+	C:\PROGRA~2\MICROS~1.0\VC\bin\X86_AM~1\cl.exe  @C:\Users\Nicholas\AppData\Local\Temp\nm72CD.tmp
+CheckSymbolExists.c
+Linking C executable cmTC_1d989.exe
+	"C:\Program Files (x86)\CMake\bin\cmake.exe" -E vs_link_exe --intdir=CMakeFiles\cmTC_1d989.dir --manifests  -- C:\PROGRA~2\MICROS~1.0\VC\bin\X86_AM~1\link.exe /nologo @CMakeFiles\cmTC_1d989.dir\objects1.rsp @C:\Users\Nicholas\AppData\Local\Temp\nm730D.tmp
+
+File C:/Users/Nicholas/Documents/GitHub/MTI835/CMakeFiles/CMakeTmp/CheckSymbolExists.c:
+/* */
+#include <C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v7.5/include/CL/cl.h>
+
+int main(int argc, char** argv)
+{
+  (void)argv;
+#ifndef CL_VERSION_1_2
+  return ((int*)(&CL_VERSION_1_2))[argc];
+#else
+  (void)argc;
+  return 0;
+#endif
+}
+
+Determining if the CL_VERSION_1_2 exist passed with the following output:
+Change Dir: C:/Users/Nicholas/Documents/GitHub/MTI835/CMakeFiles/CMakeTmp
+
+Run Build Command:"nmake" "/NOLOGO" "cmTC_461f1\fast"
+	"C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\BIN\nmake.exe" -f CMakeFiles\cmTC_461f1.dir\build.make /nologo -L                  CMakeFiles\cmTC_461f1.dir\build
+Building C object CMakeFiles/cmTC_461f1.dir/CheckSymbolExists.c.obj
+	C:\PROGRA~2\MICROS~1.0\VC\bin\X86_AM~1\cl.exe  @C:\Users\Nicholas\AppData\Local\Temp\nmB3D0.tmp
+CheckSymbolExists.c
+Linking C executable cmTC_461f1.exe
+	"C:\Program Files (x86)\CMake\bin\cmake.exe" -E vs_link_exe --intdir=CMakeFiles\cmTC_461f1.dir --manifests  -- C:\PROGRA~2\MICROS~1.0\VC\bin\X86_AM~1\link.exe /nologo @CMakeFiles\cmTC_461f1.dir\objects1.rsp @C:\Users\Nicholas\AppData\Local\Temp\nmB410.tmp
+
+File C:/Users/Nicholas/Documents/GitHub/MTI835/CMakeFiles/CMakeTmp/CheckSymbolExists.c:
+/* */
+#include <C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v7.5/include/CL/cl.h>
+
+int main(int argc, char** argv)
+{
+  (void)argv;
+#ifndef CL_VERSION_1_2
+  return ((int*)(&CL_VERSION_1_2))[argc];
+#else
+  (void)argc;
+  return 0;
+#endif
+}
+
+Determining if the CL_VERSION_1_2 exist passed with the following output:
+Change Dir: C:/Users/Nicholas/Documents/GitHub/MTI835/CMakeFiles/CMakeTmp
+
+Run Build Command:"nmake" "/NOLOGO" "cmTC_c0946\fast"
+	"C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\BIN\nmake.exe" -f CMakeFiles\cmTC_c0946.dir\build.make /nologo -L                  CMakeFiles\cmTC_c0946.dir\build
+Building C object CMakeFiles/cmTC_c0946.dir/CheckSymbolExists.c.obj
+	C:\PROGRA~2\MICROS~1.0\VC\bin\X86_AM~1\cl.exe  @C:\Users\Nicholas\AppData\Local\Temp\nm1B06.tmp
+CheckSymbolExists.c
+Linking C executable cmTC_c0946.exe
+	"C:\Program Files (x86)\CMake\bin\cmake.exe" -E vs_link_exe --intdir=CMakeFiles\cmTC_c0946.dir --manifests  -- C:\PROGRA~2\MICROS~1.0\VC\bin\X86_AM~1\link.exe /nologo @CMakeFiles\cmTC_c0946.dir\objects1.rsp @C:\Users\Nicholas\AppData\Local\Temp\nm1B64.tmp
+
+File C:/Users/Nicholas/Documents/GitHub/MTI835/CMakeFiles/CMakeTmp/CheckSymbolExists.c:
+/* */
+#include <C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v7.5/include/CL/cl.h>
+
+int main(int argc, char** argv)
+{
+  (void)argv;
+#ifndef CL_VERSION_1_2
+  return ((int*)(&CL_VERSION_1_2))[argc];
+#else
+  (void)argc;
+  return 0;
+#endif
+}
+

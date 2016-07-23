@@ -56,6 +56,8 @@ private:
     btRigidBody* m_pickedBody;
 
     vkTools::UniformData bPointsStorageBuffer;
+    vkTools::UniformData lightsStorageBuffer;
+
     std::vector<BurningPoint> bPoints;
 
     std::chrono::time_point<std::chrono::high_resolution_clock> tStart;
@@ -65,6 +67,7 @@ private:
     struct{
         glm::mat4 projection;
         glm::mat4 view;
+        //uint32_t light=0;
     } ubo;
 
     // Shader properites for a material
@@ -154,24 +157,35 @@ public:
         VkDescriptorSet scene;
     } descriptorSets;
 	VkDescriptorSetLayout descriptorSetLayout;
+    VkDescriptorSet sceneDescSet;
 
     struct {
         VkPipeline scene;
         VkPipeline blend;
     } pipelines;
 
+    struct PConst {
+        uint32_t index;
+        float factor;
+    }pCostant;
+
     Shadow* shadow;
 
     VkSemaphore offscreenSemaphore = VK_NULL_HANDLE;
     VkSemaphore computeSemaphore = VK_NULL_HANDLE;
-
 
 	VulkanExample() : VulkanExampleBase(ENABLE_VALIDATION)
 	{
 		zoom = -5.0f;
         rotation = glm::vec3(0.0f, 0.0f, 0.0f);
 		title = "Vulkan Example - Using pipelines";
-        lights.push_back(glm::vec4(5.0f,10.0f,0.0f,1.0f));
+        for(int i=0;i<3;i++){
+            float x= -5.0f + 25.0f*(rand() / double(RAND_MAX));
+            float z= -5.0f + 25.0f*(rand() / double(RAND_MAX));
+
+            lights.push_back(glm::vec4(x,10.0f,z,1.0f));
+        }
+        pCostant.factor = 1.0f/lights.size();
 	}
 
 	~VulkanExample()
@@ -291,34 +305,21 @@ public:
         clearValues[1].depthStencil = { 1.0f, 0 };
 
         VkRenderPassBeginInfo renderPassBeginInfo = vkTools::initializers::renderPassBeginInfo();
-        renderPassBeginInfo.renderPass = renderPass;
         renderPassBeginInfo.renderArea.offset.x = 0;
         renderPassBeginInfo.renderArea.offset.y = 0;
         renderPassBeginInfo.renderArea.extent.width = width;
         renderPassBeginInfo.renderArea.extent.height = height;
-        renderPassBeginInfo.clearValueCount = 2;
-        renderPassBeginInfo.pClearValues = clearValues;
 
         VkResult err;
 
         for (int32_t i = 0; i < drawCmdBuffers.size(); ++i)
         {
 
-
-            // Set target frame buffer
-            renderPassBeginInfo.framebuffer = frameBuffers[i];
-
-            err = vkBeginCommandBuffer(drawCmdBuffers[i], &cmdBufInfo);
-            assert(!err);
-
-            vkCmdBeginRenderPass(drawCmdBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
-
             VkViewport viewport = vkTools::initializers::viewport(
                 (float)width,
                 (float)height,
                 0.0f,
                 1.0f);
-            vkCmdSetViewport(drawCmdBuffers[i], 0, 1, &viewport);
 
             VkRect2D scissor = vkTools::initializers::rect2D(
                 width,
@@ -326,40 +327,72 @@ public:
                 0,
                 0);
 
+            // Set target frame buffer
+            renderPassBeginInfo.framebuffer = frameBuffers[i];
 
-            vkCmdEndRenderPass(drawCmdBuffers[i]);
-
-            renderPassBeginInfo.clearValueCount = 0;
-            renderPassBeginInfo.pClearValues = VK_NULL_HANDLE;
+            err = vkBeginCommandBuffer(drawCmdBuffers[i], &cmdBufInfo);
+            assert(!err);
 
             shadow->buildOffscreenCommandBuffer(drawCmdBuffers[i],cubes,&bPointsStorageBuffer.buffer,0);
 
-            vkCmdSetViewport(drawCmdBuffers[i], 0, 1, &viewport);
-            vkCmdSetScissor(drawCmdBuffers[i], 0, 1, &scissor);
-            vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.scene);
+            renderPassBeginInfo.clearValueCount = 2;
+            renderPassBeginInfo.pClearValues = clearValues;
+            renderPassBeginInfo.renderPass = renderPass;
 
             vkCmdBeginRenderPass(drawCmdBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
+
+            vkCmdSetViewport(drawCmdBuffers[i], 0, 1, &viewport);
+            vkCmdSetScissor(drawCmdBuffers[i], 0, 1, &scissor);
+            vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayouts.scene, 0, 1, &sceneDescSet, 0, NULL);
+            vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.scene);
+
+            pCostant.index=0;
+
+            vkCmdPushConstants(
+                drawCmdBuffers[i],
+                pipelineLayouts.scene,
+                VK_SHADER_STAGE_FRAGMENT_BIT,
+                0,
+                8,
+                &pCostant);
+
             for (auto& cube : cubes)
             {
-                cube->draw(drawCmdBuffers[i], pipelineLayouts.scene, &bPointsStorageBuffer.buffer);
+                cube->draw(drawCmdBuffers[i], &bPointsStorageBuffer.buffer);
             }
 
-            for(int j=1;j<2;j++){
+            renderPassBeginInfo.clearValueCount = 0;
+            renderPassBeginInfo.pClearValues = VK_NULL_HANDLE;
+            renderPassBeginInfo.renderPass = renderPassBlend;
+
+
+            for(uint32_t j=1;j<lights.size();j++){
 
                 vkCmdEndRenderPass(drawCmdBuffers[i]);
 
-                shadow->buildOffscreenCommandBuffer(drawCmdBuffers[i],cubes,&bPointsStorageBuffer.buffer,0);
+                shadow->buildOffscreenCommandBuffer(drawCmdBuffers[i],cubes,&bPointsStorageBuffer.buffer,j);
 
                 vkCmdBeginRenderPass(drawCmdBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
                 vkCmdSetViewport(drawCmdBuffers[i], 0, 1, &viewport);
                 vkCmdSetScissor(drawCmdBuffers[i], 0, 1, &scissor);
+                vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayouts.scene, 0, 1, &sceneDescSet, 0, NULL);
                 vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.blend);
+
+                pCostant.index=j;
+
+                vkCmdPushConstants(
+                    drawCmdBuffers[i],
+                    pipelineLayouts.scene,
+                    VK_SHADER_STAGE_FRAGMENT_BIT,
+                    0,
+                    8,
+                    &pCostant);
 
                 for (auto& cube : cubes)
                 {
-                    cube->draw(drawCmdBuffers[i], pipelineLayouts.scene, &bPointsStorageBuffer.buffer);
+                    cube->draw(drawCmdBuffers[i], &bPointsStorageBuffer.buffer);
                 }
             }
 
@@ -494,6 +527,52 @@ public:
         objectData.push_back(fire->addBurningPoints(allo,2));*/
 
         //std::cout <<" errrrre "<< allo.size() << std::endl;
+    }
+
+    void setupLights(){
+        uint32_t storageBufferSize = lights.size() * sizeof(glm::vec4);
+
+        // Staging
+        // SSBO is static, copy to device local memory
+        // This results in better performance
+
+        struct {
+            VkDeviceMemory memory;
+            VkBuffer buffer;
+        } stagingBuffer;
+        createBuffer(
+            VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+            storageBufferSize,
+            lights.data(),
+            &stagingBuffer.buffer,
+            &stagingBuffer.memory);
+
+        createBuffer(
+            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            storageBufferSize,
+            nullptr,
+            &lightsStorageBuffer.buffer,
+            &lightsStorageBuffer.memory);
+
+        // Copy to staging buffer
+        VkCommandBuffer copyCmd = createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+
+        VkBufferCopy copyRegion = {};
+        copyRegion.size = storageBufferSize;
+        vkCmdCopyBuffer(
+            copyCmd,
+            stagingBuffer.buffer,
+            lightsStorageBuffer.buffer,
+            1,
+            &copyRegion);
+        flushCommandBuffer(copyCmd, queue, true);
+        vkFreeMemory(device, stagingBuffer.memory, nullptr);
+        vkDestroyBuffer(device, stagingBuffer.buffer, nullptr);
+        lightsStorageBuffer.descriptor.range = storageBufferSize;
+        lightsStorageBuffer.descriptor.buffer = lightsStorageBuffer.buffer;
+        lightsStorageBuffer.descriptor.offset = 0;
     }
 
     void prepareBurningPoints(){
@@ -635,7 +714,12 @@ std::cout<< "alloc burning " << sizeof(BurningPoint)<<std::endl;
             vkTools::initializers::descriptorSetLayoutBinding(
                 VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 VK_SHADER_STAGE_FRAGMENT_BIT,
-                3)
+                3),
+            // Binding 3 : Shadow maps
+            vkTools::initializers::descriptorSetLayoutBinding(
+                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                VK_SHADER_STAGE_FRAGMENT_BIT,
+                4)
         };
 
 		VkDescriptorSetLayoutCreateInfo descriptorLayout =
@@ -651,6 +735,17 @@ std::cout<<"create"<<std::endl;
 			vkTools::initializers::pipelineLayoutCreateInfo(
 				&descriptorSetLayout,
 				1);
+
+        // Push constants for cube map face view matrices
+            VkPushConstantRange pushConstantRange =
+                vkTools::initializers::pushConstantRange(
+                    VK_SHADER_STAGE_FRAGMENT_BIT,
+                    8,
+                    0);
+
+            // Push constant ranges are part of the pipeline layout
+            pPipelineLayoutCreateInfo.pushConstantRangeCount = 1;
+            pPipelineLayoutCreateInfo.pPushConstantRanges = &pushConstantRange;
 
         std::cout<<"create"<<std::endl;
 
@@ -684,12 +779,76 @@ std::cout<<"create"<<std::endl;
             VkResult err = vkMapMemory(device, uniformData.objectsUniforme.memory, 0, size, 0, (void **)&pData);
             assert(!err);
 
-            vkTools::VulkanTexture* texs[3] = {&paper,&burn,shadow->getCubeMapTexture()};
+            VkDescriptorSetAllocateInfo allocInfo =
+                vkTools::initializers::descriptorSetAllocateInfo(
+                    descriptorPool,
+                    &descriptorSetLayout,
+                    1);
+
+            VkResult vkRes = vkAllocateDescriptorSets(device, &allocInfo, &sceneDescSet);
+            assert(!vkRes);
+
+            // Color map image descriptor
+            VkDescriptorImageInfo texDescriptorColorMap =
+                vkTools::initializers::descriptorImageInfo(
+                    paper.sampler,
+                    paper.view,
+                    VK_IMAGE_LAYOUT_GENERAL);
+
+            // Burn image descriptor
+            VkDescriptorImageInfo texDescriptorBurned =
+                vkTools::initializers::descriptorImageInfo(
+                    burn.sampler,
+                    burn.view,
+                    VK_IMAGE_LAYOUT_GENERAL);
+
+            // Burn image descriptor
+            VkDescriptorImageInfo texDescriptorShadow =
+                vkTools::initializers::descriptorImageInfo(
+                    shadow->getCubeMapTexture()->sampler,
+                    shadow->getCubeMapTexture()->view,
+                    VK_IMAGE_LAYOUT_GENERAL);
+
+            std::vector<VkWriteDescriptorSet> writeDescriptorSets =
+            {
+                // Binding 0 : Vertex shader uniform buffer
+                vkTools::initializers::writeDescriptorSet(
+                    sceneDescSet,
+                    VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    0,
+                    &uniformData.scene.descriptor),
+                // Binding 1 : Fragment shader image sampler
+                vkTools::initializers::writeDescriptorSet(
+                    sceneDescSet,
+                    VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                    1,
+                    &texDescriptorColorMap),
+                // Binding 2 : Fragment shader image sampler
+                vkTools::initializers::writeDescriptorSet(
+                    sceneDescSet,
+                    VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                    2,
+                    &texDescriptorBurned),
+                // Binding 3 : Fragment shader image sampler
+                vkTools::initializers::writeDescriptorSet(
+                    sceneDescSet,
+                    VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                    3,
+                    &texDescriptorShadow),
+                // Binding 4 : Lights
+                vkTools::initializers::writeDescriptorSet(
+                    sceneDescSet,
+                    VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                    4,
+                    &lightsStorageBuffer.descriptor)
+            };
+
+            vkUpdateDescriptorSets(device, writeDescriptorSets.size(), writeDescriptorSets.data(), 0, NULL);
 
             for (auto& cube : cubes)
             {
                 std::cout<<"test "<< offset<<std::endl;
-                cube->setupDescriptorSet(descriptorPool, descriptorSetLayout,&uniformData.scene.descriptor,texs,offset ,pData);
+                cube->setupMemory(offset ,pData);
                 offset+=16*4;
             }
         }
@@ -843,7 +1002,8 @@ std::cout<<"shaderload2"<<std::endl;
         setupDescriptorSetLayout();std::cout<<"bumbo2"<<std::endl;
         preparePipelinesCubes();std::cout<<"bumbo3"<<std::endl;
         setupDescriptorPool();std::cout<<"bumbo4"<<std::endl;
-        shadow = new Shadow(device,queue,renderPass,fbDepthFormat,this,&vertices.inputState);
+        setupLights();
+        shadow = new Shadow(device,queue,&lightsStorageBuffer.descriptor,fbDepthFormat,this,&vertices.inputState);
         setupDescriptorSets();std::cout<<"bumbo5"<<std::endl;
         buildCommandBuffers();std::cout<<"bumbo6"<<std::endl;
         buildBulletScene();std::cout<<"bumbo7"<<std::endl;

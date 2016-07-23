@@ -1656,6 +1656,12 @@ void VulkanExampleBase::setupRenderPass()
 	renderPassInfo.pDependencies = NULL;
 
 	VK_CHECK_RESULT(vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass));
+
+    attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+
+    VK_CHECK_RESULT(vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPassBlend));
+
 }
 
 void VulkanExampleBase::windowResize()

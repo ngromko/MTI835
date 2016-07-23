@@ -14,10 +14,15 @@ layout (binding = 0) uniform UBO
 	vec3 lightPos[2];
 } ubo;
 
+layout (binding = 1) buffer Lights 
+{
+	vec4 lights[];
+};
+
 layout(push_constant) uniform PushConsts 
 {
 	mat4 view;
-    uint lightIndex;
+    uvec4 lightIndex;
 } pushConsts;
  
 out gl_PerVertex 
@@ -27,12 +32,9 @@ out gl_PerVertex
  
 void main()
 {
-    vec3 lights[2];
-    lights[0] = vec3(5.0f,10.0f,0.0f);
-    lights[1] = vec3(5.0f,10.0f,0.0f);
-    
-	gl_Position = ubo.projection * pushConsts.view * vec4(inPos-lights[pushConsts.lightIndex], 1.0);
+    vec3 light = lights[pushConsts.lightIndex.x].xyz;
+	gl_Position = ubo.projection * pushConsts.view * vec4(inPos-light, 1.0);
 
 	outPos = inPos;	
-	outLightPos = lights[pushConsts.lightIndex]; 
+	outLightPos = light; 
 }

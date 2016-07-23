@@ -38,8 +38,6 @@ protected:
     uint32_t burnStart;
     uint32_t burnCount;
 
-    VkDescriptorSet descriptorSet;
-
     bool burnable;
 
     struct Vertex
@@ -202,79 +200,12 @@ public:
         return rbody;
     }
 
-    void setupDescriptorSet(VkDescriptorPool pool, VkDescriptorSetLayout descriptorSetLayout, VkDescriptorBufferInfo* uboDesc, vkTools::VulkanTexture** eTexture, uint32_t offSet, uint8_t* pdata)
+    void setupMemory(uint32_t offSet, uint8_t* pdata)
     {
         offset = offSet;
         this->pBurn = pdata;
-        VkDescriptorSetAllocateInfo allocInfo =
-            vkTools::initializers::descriptorSetAllocateInfo(
-                pool,
-                &descriptorSetLayout,
-                1);
 
-        VkResult vkRes = vkAllocateDescriptorSets(device, &allocInfo, &descriptorSet);
-        assert(!vkRes);
-
-        // Color map image descriptor
-        VkDescriptorImageInfo texDescriptorColorMap =
-            vkTools::initializers::descriptorImageInfo(
-                eTexture[0]->sampler,
-                eTexture[0]->view,
-                VK_IMAGE_LAYOUT_GENERAL);
-
-        // Burn image descriptor
-        VkDescriptorImageInfo texDescriptorBurned =
-            vkTools::initializers::descriptorImageInfo(
-                eTexture[1]->sampler,
-                eTexture[1]->view,
-                VK_IMAGE_LAYOUT_GENERAL);
-
-        // Burn image descriptor
-        VkDescriptorImageInfo texDescriptorShadow =
-            vkTools::initializers::descriptorImageInfo(
-                eTexture[2]->sampler,
-                eTexture[2]->view,
-                VK_IMAGE_LAYOUT_GENERAL);
-
-        std::vector<VkWriteDescriptorSet> writeDescriptorSets =
-        {
-            // Binding 0 : Vertex shader uniform buffer
-            vkTools::initializers::writeDescriptorSet(
-            descriptorSet,
-                VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                0,
-                uboDesc),
-            // Binding 1 : Fragment shader image sampler
-            vkTools::initializers::writeDescriptorSet(
-                descriptorSet,
-                VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                1,
-                &texDescriptorColorMap),
-            // Binding 2 : Fragment shader image sampler
-            vkTools::initializers::writeDescriptorSet(
-                descriptorSet,
-                VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                2,
-                &texDescriptorBurned),
-            // Binding 3 : Fragment shader image sampler
-            vkTools::initializers::writeDescriptorSet(
-                descriptorSet,
-                VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                3,
-                &texDescriptorShadow)
-        };
-
-        vkUpdateDescriptorSets(device, writeDescriptorSets.size(), writeDescriptorSets.data(), 0, NULL);
         updateModel(model);
-    }
-
-    void draw(VkCommandBuffer cmdbuffer, VkPipelineLayout pipelineLayout, VkBuffer* vertexBuffer)
-    {
-        VkDeviceSize offsets[1] = { 0 };
-        vkCmdBindDescriptorSets(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, NULL);
-        vkCmdBindVertexBuffers(cmdbuffer, 0, 1, vertexBuffer, offsets);
-        vkCmdBindIndexBuffer(cmdbuffer, indicesBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-        vkCmdDrawIndexed(cmdbuffer, indices.size(), 1, 0, burnStart, 0);
     }
 
     void draw(VkCommandBuffer cmdbuffer, VkBuffer* vertexBuffer)

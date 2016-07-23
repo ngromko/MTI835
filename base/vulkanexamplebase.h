@@ -108,8 +108,10 @@ protected:
 	VkSubmitInfo submitInfo;
 	// Command buffers used for rendering
 	std::vector<VkCommandBuffer> drawCmdBuffers;
-	// Global render pass for frame buffer writes
-	VkRenderPass renderPass;
+
+
+    // Global render pass for frame buffer writes
+    VkRenderPass renderPassBlend;
 	// List of available frame buffers (same as number of swap chain images)
 	std::vector<VkFramebuffer>frameBuffers;
 	// Active frame buffer index
@@ -133,6 +135,9 @@ protected:
     // Returns the base asset path (for shaders, models, textures) depending on the os
     void buildPresentCommandBuffers();
 public:
+
+    // Global render pass for frame buffer writes
+    VkRenderPass renderPass;
     const std::string getAssetPath();
 	bool prepared = false;
 	uint32_t width = 1280;

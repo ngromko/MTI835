@@ -69,9 +69,9 @@ private:
         VkRenderPass renderPass;
     } offScreenFrameBuf;
 
-    struct {
+    struct PConst {
         glm::mat4 viewMatrix;
-        uint32_t lightIndex;
+        glm::u32vec4 lightIndex;
     }pCostant;
 
     //VkCommandBuffer offScreenCmdBuffer = VK_NULL_HANDLE;
@@ -84,8 +84,8 @@ private:
     void updateCubeFace(uint32_t faceIndex, uint32_t light, std::vector<VulkanObject *> objects, VkBuffer *points);
     void preparePipeline(VkPipelineVertexInputStateCreateInfo *verticesState);
     void setupDescriptorSetLayout();
-    void setupDescriptorSets();
     void updateCubeFace(VkCommandBuffer offScreenCmdBuffer, uint32_t faceIndex, uint32_t light, std::vector<VulkanObject *> objects, VkBuffer *points);
+    void setupDescriptorSets(VkDescriptorBufferInfo *lights);
 public:
     ~Shadow();
     vkTools::VulkanTexture *getCubeMapTexture();
@@ -93,6 +93,6 @@ public:
 
     VkCommandBuffer *getCommandBuffer();
     void buildOffscreenCommandBuffer(VkCommandBuffer offScreenCmdBuffer, std::vector<VulkanObject *> objects, VkBuffer *points, uint32_t lightIndex);
-    Shadow(VkDevice edevice, VkQueue queue, VkRenderPass renderpass, VkFormat depthFormat, VulkanExampleBase *mainClass, VkPipelineVertexInputStateCreateInfo *verticesState);
+    Shadow(VkDevice edevice, VkQueue queue, VkDescriptorBufferInfo *lights, VkFormat depthFormat, VulkanExampleBase *mainClass, VkPipelineVertexInputStateCreateInfo *verticesState);
 };
 
