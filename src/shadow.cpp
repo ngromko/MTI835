@@ -4,15 +4,15 @@ Gère les ombres pour la scène
 
 #include "Shadow.h"
 
-Shadow::Shadow(VkDevice edevice, VkQueue queue, VkDescriptorBufferInfo* lights, VkFormat depthFormat, VulkanExampleBase* mainClass,VkPipelineVertexInputStateCreateInfo* verticesState):exampleBase(mainClass),device(edevice),fbDepthFormat(depthFormat)
+Shadow::Shadow(VkDevice edevice, VkQueue queue, VkDescriptorBufferInfo* lights, VkFormat depthFormat, VulkanExampleBase* mainClass,VkPipelineVertexInputStateCreateInfo* verticesState):exampleBase(mainClass),device(edevice)
 {
     prepareUniformBuffers();
     prepareCubeMap(queue);
     setupDescriptorSetLayout();
-    prepareOffscreenRenderpass();
+    prepareOffscreenRenderpass(depthFormat);
     preparePipeline(verticesState);
     setupDescriptorSets(lights);
-    prepareOffscreenFramebuffer(queue);
+    prepareOffscreenFramebuffer(queue,depthFormat);
 }
 
 vkTools::VulkanTexture* Shadow::getCubeMapTexture()
@@ -22,17 +22,7 @@ vkTools::VulkanTexture* Shadow::getCubeMapTexture()
 
 Shadow::~Shadow()
 {
-    // Color attachment
-    vkDestroyImageView(device, offScreenFrameBuf.color.view, nullptr);
-    vkDestroyImage(device, offScreenFrameBuf.color.image, nullptr);
-    vkFreeMemory(device, offScreenFrameBuf.color.mem, nullptr);
-
-    // Depth attachment
-    vkDestroyImageView(device, offScreenFrameBuf.depth.view, nullptr);
-    vkDestroyImage(device, offScreenFrameBuf.depth.image, nullptr);
-    vkFreeMemory(device, offScreenFrameBuf.depth.mem, nullptr);
-
-    vkDestroyFramebuffer(device, offScreenFrameBuf.frameBuffer, nullptr);
+    offScreenFrameBuf.FreeResources(device);
 }
 
 void Shadow::prepareCubeMap(VkQueue queue)
@@ -119,8 +109,10 @@ void Shadow::prepareCubeMap(VkQueue queue)
 // Prepare a new framebuffer for offscreen rendering
 // The contents of this framebuffer are then
 // copied to the different cube map faces
-void Shadow::prepareOffscreenFramebuffer(VkQueue queue)
+void Shadow::prepareOffscreenFramebuffer(VkQueue queue, VkFormat fbDepthFormat)
 {
+    offScreenFrameBuf.attachments.resize(2);
+
     offScreenFrameBuf.width = FB_DIM;
     offScreenFrameBuf.height = FB_DIM;
 
@@ -157,24 +149,24 @@ void Shadow::prepareOffscreenFramebuffer(VkQueue queue)
 
     VkMemoryRequirements memReqs;
 
-    VK_CHECK_RESULT(vkCreateImage(device, &imageCreateInfo, nullptr, &offScreenFrameBuf.color.image));
-    vkGetImageMemoryRequirements(device, offScreenFrameBuf.color.image, &memReqs);
+    VK_CHECK_RESULT(vkCreateImage(device, &imageCreateInfo, nullptr, &offScreenFrameBuf.attachments[0].image));
+    vkGetImageMemoryRequirements(device, offScreenFrameBuf.attachments[0].image, &memReqs);
     memAlloc.allocationSize = memReqs.size;
     memAlloc.memoryTypeIndex = exampleBase->getMemoryType(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    VK_CHECK_RESULT(vkAllocateMemory(device, &memAlloc, nullptr, &offScreenFrameBuf.color.mem));
-    VK_CHECK_RESULT(vkBindImageMemory(device, offScreenFrameBuf.color.image, offScreenFrameBuf.color.mem, 0));
+    VK_CHECK_RESULT(vkAllocateMemory(device, &memAlloc, nullptr, &offScreenFrameBuf.attachments[0].mem));
+    VK_CHECK_RESULT(vkBindImageMemory(device, offScreenFrameBuf.attachments[0].image, offScreenFrameBuf.attachments[0].mem, 0));
 
     VkCommandBuffer layoutCmd = exampleBase->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY,true);
 
     vkTools::setImageLayout(
         layoutCmd,
-        offScreenFrameBuf.color.image,
+        offScreenFrameBuf.attachments[0].image,
         VK_IMAGE_ASPECT_COLOR_BIT,
         VK_IMAGE_LAYOUT_UNDEFINED,
         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-    colorImageView.image = offScreenFrameBuf.color.image;
-    VK_CHECK_RESULT(vkCreateImageView(device, &colorImageView, nullptr, &offScreenFrameBuf.color.view));
+    colorImageView.image = offScreenFrameBuf.attachments[0].image;
+    VK_CHECK_RESULT(vkCreateImageView(device, &colorImageView, nullptr, &offScreenFrameBuf.attachments[0].view));
 
     // Depth stencil attachment
     imageCreateInfo.format = fbDepthFormat;
@@ -191,28 +183,28 @@ void Shadow::prepareOffscreenFramebuffer(VkQueue queue)
     depthStencilView.subresourceRange.baseArrayLayer = 0;
     depthStencilView.subresourceRange.layerCount = 1;
 
-    VK_CHECK_RESULT(vkCreateImage(device, &imageCreateInfo, nullptr, &offScreenFrameBuf.depth.image));
-    vkGetImageMemoryRequirements(device, offScreenFrameBuf.depth.image, &memReqs);
+    VK_CHECK_RESULT(vkCreateImage(device, &imageCreateInfo, nullptr, &offScreenFrameBuf.attachments[1].image));
+    vkGetImageMemoryRequirements(device, offScreenFrameBuf.attachments[1].image, &memReqs);
     memAlloc.allocationSize = memReqs.size;
     memAlloc.memoryTypeIndex = exampleBase->getMemoryType(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    VK_CHECK_RESULT(vkAllocateMemory(device, &memAlloc, nullptr, &offScreenFrameBuf.depth.mem));
-    VK_CHECK_RESULT(vkBindImageMemory(device, offScreenFrameBuf.depth.image, offScreenFrameBuf.depth.mem, 0));
+    VK_CHECK_RESULT(vkAllocateMemory(device, &memAlloc, nullptr, &offScreenFrameBuf.attachments[1].mem));
+    VK_CHECK_RESULT(vkBindImageMemory(device, offScreenFrameBuf.attachments[1].image, offScreenFrameBuf.attachments[1].mem, 0));
 
     vkTools::setImageLayout(
         layoutCmd,
-        offScreenFrameBuf.depth.image,
+        offScreenFrameBuf.attachments[1].image,
         VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT,
         VK_IMAGE_LAYOUT_UNDEFINED,
         VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
     exampleBase->flushCommandBuffer(layoutCmd, queue, true);
 
-    depthStencilView.image = offScreenFrameBuf.depth.image;
-    VK_CHECK_RESULT(vkCreateImageView(device, &depthStencilView, nullptr, &offScreenFrameBuf.depth.view));
+    depthStencilView.image = offScreenFrameBuf.attachments[1].image;
+    VK_CHECK_RESULT(vkCreateImageView(device, &depthStencilView, nullptr, &offScreenFrameBuf.attachments[1].view));
 
     VkImageView attachments[2];
-    attachments[0] = offScreenFrameBuf.color.view;
-    attachments[1] = offScreenFrameBuf.depth.view;
+    attachments[0] = offScreenFrameBuf.attachments[0].view;
+    attachments[1] = offScreenFrameBuf.attachments[1].view;
 
     VkFramebufferCreateInfo fbufCreateInfo = vkTools::initializers::framebufferCreateInfo();
     fbufCreateInfo.renderPass = offScreenFrameBuf.renderPass;
@@ -235,30 +227,29 @@ void Shadow::updateCubeFace(VkCommandBuffer offScreenCmdBuffer, uint32_t faceInd
 
 
     // Update view matrix via push constant
-    pCostant.viewMatrix = glm::scale(glm::mat4(),glm::vec3(-1,-1,1));
+    pCostant.viewMatrix = glm::scale(glm::mat4(),glm::vec3(1,-1,1));
     pCostant.lightIndex.x=light;
 
     switch (faceIndex)
     {
     case 0: // POSITIVE_X
-        pCostant.viewMatrix = glm::rotate(pCostant.viewMatrix, glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        //pCostant.viewMatrix = glm::rotate(pCostant.viewMatrix, glm::radians(180.0f), glm::vec3(1.0f,0.0f, 0.0f));
-        break;
-    case 1:	// NEGATIVE_X
         pCostant.viewMatrix = glm::rotate(pCostant.viewMatrix, glm::radians(-90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
         break;
+    case 1:	// NEGATIVE_X
+        pCostant.viewMatrix = glm::rotate(pCostant.viewMatrix, glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        break;
     case 2:	// POSITIVE_Y
-        pCostant.viewMatrix = glm::rotate(pCostant.viewMatrix, glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-        pCostant.viewMatrix = glm::rotate(pCostant.viewMatrix, glm::radians(180.0f), glm::vec3(0.0f,1.0f, 0.0f));
+        pCostant.viewMatrix = glm::rotate(pCostant.viewMatrix, glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
         break;
     case 3:	// NEGATIVE_Y
-        pCostant.viewMatrix = glm::rotate(pCostant.viewMatrix, glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-        pCostant.viewMatrix = glm::rotate(pCostant.viewMatrix, glm::radians(180.0f), glm::vec3(0.0f,1.0f, 0.0f));
+        pCostant.viewMatrix = glm::rotate(pCostant.viewMatrix, glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
         break;
-    case 4:	// POSITIVE_Z
+    case 5:	// POSITIVE_Z
         pCostant.viewMatrix = glm::rotate(pCostant.viewMatrix, glm::radians(180.0f), glm::vec3(0.0f, 1.0f, 0.0f));
         break;
     }
+
+
 
     VkClearValue clearValues[2];
     clearValues[0].color = { { 0.0f,0.0f, 0.0f, 1.0f } };
@@ -279,8 +270,7 @@ void Shadow::updateCubeFace(VkCommandBuffer offScreenCmdBuffer, uint32_t faceInd
     // Update shader push constant block
     // Contains current face view matrix
 
-    //std::cout<< "pcojaefg "<< pCostant.lightIndex << std::endl;
-                vkCmdPushConstants(
+    vkCmdPushConstants(
         offScreenCmdBuffer,
         shadowPipelineLayout,
         VK_SHADER_STAGE_VERTEX_BIT,
@@ -299,7 +289,7 @@ void Shadow::updateCubeFace(VkCommandBuffer offScreenCmdBuffer, uint32_t faceInd
     // Make sure color writes to the framebuffer are finished before using it as transfer source
     vkTools::setImageLayout(
         offScreenCmdBuffer,
-        offScreenFrameBuf.color.image,
+        offScreenFrameBuf.attachments[0].image,
         VK_IMAGE_ASPECT_COLOR_BIT,
         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
@@ -326,7 +316,7 @@ void Shadow::updateCubeFace(VkCommandBuffer offScreenCmdBuffer, uint32_t faceInd
     // Put image copy into command buffer
     vkCmdCopyImage(
         offScreenCmdBuffer,
-        offScreenFrameBuf.color.image,
+        offScreenFrameBuf.attachments[0].image,
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         shadowCubeMap.image,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -336,7 +326,7 @@ void Shadow::updateCubeFace(VkCommandBuffer offScreenCmdBuffer, uint32_t faceInd
     // Transform framebuffer color attachment back
     vkTools::setImageLayout(
         offScreenCmdBuffer,
-        offScreenFrameBuf.color.image,
+        offScreenFrameBuf.attachments[0].image,
         VK_IMAGE_ASPECT_COLOR_BIT,
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
@@ -395,7 +385,7 @@ void Shadow::buildOffscreenCommandBuffer(VkCommandBuffer offScreenCmdBuffer, std
 // This is necessary as the offscreen frame buffer attachments
 // use formats different to the ones from the visible frame buffer
 // and at least the depth one may not be compatible
-void Shadow::prepareOffscreenRenderpass()
+void Shadow::prepareOffscreenRenderpass(VkFormat fbDepthFormat)
 {
     VkAttachmentDescription osAttachments[2] = {};
 
@@ -444,7 +434,7 @@ void Shadow::prepareOffscreenRenderpass()
 // Prepare and initialize uniform buffer containing shader uniforms
 void Shadow::prepareUniformBuffers()
 {
-    uboOffscreenVS.projection = glm::perspective((float)(M_PI / 2.0), 1.0f, 300.0f, zFar);
+    uboOffscreenVS.projection = glm::perspectiveLH((float)(M_PI / 2.0), 1.0f, zNear, zFar);
 
     uboOffscreenVS.lightPos[0] = glm::vec3(5.0f,10.0f,0.0f);
     uboOffscreenVS.lightPos[1] = glm::vec3(5.0f,10.0f,0.0f);

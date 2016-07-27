@@ -36,10 +36,10 @@ private:
     // Reference to example for getting memory types
 
     void prepareVertices(glm::vec3 halfSize, std::vector<BurningPoint> &bPoints, uint32_t objectNumber);
-    void prepareRigidBody(glm::vec3 size,glm::vec4 startPos,float mass);
+    void prepareRigidBody(glm::vec3 size, glm::vec4 startPos);
 
 public:
     ~VulkanCube();
-    VulkanCube(VkDevice mdevice, VulkanExampleBase *mexample, VkQueue queue, glm::vec3 halfSize, glm::mat4 atartModel, bool burn, float mass, uint32_t objectNumber, std::vector<BurningPoint> &points);
+    VulkanCube(VkDevice mdevice, VulkanExampleBase *mexample, VkQueue queue, glm::vec3 halfSize, glm::mat4 atartModel, SceneMaterial mater, uint32_t objectNumber, std::vector<BurningPoint> &points);
 };
 

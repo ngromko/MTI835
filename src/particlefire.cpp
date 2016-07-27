@@ -95,7 +95,6 @@ void VulkanFire::compute(VkCommandBuffer cmdbuffer)
 
 void VulkanFire::draw(VkCommandBuffer cmdbuffer)
 {
-    std::cout<<"draw fire" << std::endl;
     // Particle system
     vkCmdBindPipeline(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, drawParticles);
     vkCmdBindDescriptorSets(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, NULL);
@@ -106,16 +105,12 @@ void VulkanFire::draw(VkCommandBuffer cmdbuffer)
 }
 
 void VulkanFire::init(VkQueue queue,VkCommandPool cpool, VkRenderPass renderpass,VkDescriptorPool pool, VkDescriptorBufferInfo* bPointsDesc, uint32_t bCount, VkSampler sampler,vkTools::VulkanTexture fire,vkTools::VulkanTexture smoke, std::string path){
-    std::cout<< "dajge" << std::endl;
     computeUbo.bPointsCount=bCount;
     prepareParticles(queue);
     prepareGrid();
     prepareUniformBuffers();
-std::cout<< "dajge1" << std::endl;
     prepareComputeLayout(pool,bPointsDesc);
-    std::cout<< "dajge2" << std::endl;
     prepareComputePipelines(path);
-std::cout<< "dajge3" << std::endl;
     setupDescriptorSet(pool,bPointsDesc,sampler,fire,smoke);
     prepareRenderPipelines(renderpass,path);
     createClickCommand(cpool);
@@ -199,7 +194,7 @@ void VulkanFire::prepareParticles(VkQueue queue)
     for (auto& particle : particleBuffer)
     {
         particle.pos[0]=0;
-        particle.pos[1]=7;
+        particle.pos[1]=0;
         particle.pos[2]=0;
         particle.alpha = 0.75f;//rnd(0.75f);
         particle.size = 0.05f + rnd(0.025f);
@@ -224,7 +219,6 @@ void VulkanFire::prepareParticles(VkQueue queue)
         VkDeviceMemory memory;
         VkBuffer buffer;
     } stagingBuffer;
-std::cout<< "alloc particle " <<storageBufferSize<< std::endl;
     exampleBase->createBuffer(
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
@@ -232,7 +226,6 @@ std::cout<< "alloc particle " <<storageBufferSize<< std::endl;
         particleBuffer.data(),
         &stagingBuffer.buffer,
         &stagingBuffer.memory);
-std::cout<< "alloc particle local" <<computeUbo.particleCount<< std::endl;
     exampleBase->createBuffer(
         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
@@ -240,7 +233,6 @@ std::cout<< "alloc particle local" <<computeUbo.particleCount<< std::endl;
         nullptr,
         &particlesStorageBuffer.buffer,
         &particlesStorageBuffer.memory);
-std::cout<< "alloc particle end" << std::endl;
     // Copy to staging buffer
     VkCommandBuffer copyCmd = exampleBase->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
 
@@ -292,28 +284,28 @@ std::cout<< "alloc particle end" << std::endl;
             VERTEX_BUFFER_BIND_ID,
             2,
             VK_FORMAT_R32_SFLOAT,
-            sizeof(float) * 8));
+            sizeof(float) * 12));
     // Location 3 : Size
     attributesParticles.attributeDescriptions.push_back(
         vkTools::initializers::vertexInputAttributeDescription(
             VERTEX_BUFFER_BIND_ID,
             3,
             VK_FORMAT_R32_SFLOAT,
-            sizeof(float) * 9));
+            sizeof(float) * 13));
     // Location 4 : Rotation
     attributesParticles.attributeDescriptions.push_back(
         vkTools::initializers::vertexInputAttributeDescription(
             VERTEX_BUFFER_BIND_ID,
             4,
             VK_FORMAT_R32_SFLOAT,
-            sizeof(float) * 10));
+            sizeof(float) * 14));
     // Location 5 : Type
     attributesParticles.attributeDescriptions.push_back(
         vkTools::initializers::vertexInputAttributeDescription(
             VERTEX_BUFFER_BIND_ID,
             5,
             VK_FORMAT_R32_SINT,
-            sizeof(float) * 11));
+            sizeof(float) * 15));
 
     // Assign to vertex buffer
     attributesParticles.inputState = vkTools::initializers::pipelineVertexInputStateCreateInfo();
@@ -489,7 +481,6 @@ void VulkanFire::createClickCommand(VkCommandPool cmdPool){
     vkCmdBindDescriptorSets(clickCmd, VK_PIPELINE_BIND_POINT_COMPUTE, computePipelineLayout, 0, 1, &computeDescriptorSet, 0, 0);
 
     // Dispatch the compute job
-    std::cout<<"click"<<bGroups<<std::endl;
     vkCmdDispatch(clickCmd, bGroups, 1, 1);
 
     vkEndCommandBuffer(clickCmd);
@@ -505,10 +496,8 @@ void VulkanFire::cliked(VkQueue queue, glm::vec4 pos){
     submitInfo.pCommandBuffers = &clickCmd;
 
     // Submit to queue
-    std::cout<<"click"<<std::endl;
     vkDeviceWaitIdle(device);
     vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
-    std::cout<<"click2"<<std::endl;
 }
 
 void VulkanFire::prepareRenderLayout(VkDescriptorPool descriptorPool){
@@ -674,18 +663,14 @@ void VulkanFire::prepareRenderPipelines(VkRenderPass renderPass,std::string asse
 
 void VulkanFire::setupDescriptorSet(VkDescriptorPool pool,VkDescriptorBufferInfo* infos, VkSampler sampler,vkTools::VulkanTexture fire,vkTools::VulkanTexture smoke)
 {
-    std::cout<<"bobo" << std::endl;
     prepareRenderLayout(pool);
-    std::cout<<"bobo2" << std::endl;
     VkDescriptorSetAllocateInfo allocInfo =
         vkTools::initializers::descriptorSetAllocateInfo(
             pool,
             &descriptorSetLayout,
             1);
-std::cout<<"bobo3" << std::endl;
     VkResult vkRes = vkAllocateDescriptorSets(device, &allocInfo, &descriptorSet);
     assert(!vkRes);
-std::cout<<"bobo4" << std::endl;
     // Image descriptor for the color map texture
     VkDescriptorImageInfo texDescriptorSmoke =
         vkTools::initializers::descriptorImageInfo(
@@ -727,7 +712,6 @@ void VulkanFire::prepareUniformBuffers()
 {
     //computeUbo.deltaT=0.0f;
 
-    std::cout<< "alloc cuniform" << std::endl;
     // Compute shader uniform buffer block
     exampleBase->createBuffer(
         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
@@ -749,7 +733,6 @@ void VulkanFire::updateTime(float frameTimer)
     computeUbo.deltaT= frameTimer;//glm::vec4(1,6,1,frameTimer);
 
     computeUbo.clickPos = glm::vec4(5,2,3,4);
-    //std::cout<< sizeof(computeUbo) << std::endl;
     memcpy(computeUniformBuffer.mapped, &computeUbo, sizeof(computeUbo));
 }
 

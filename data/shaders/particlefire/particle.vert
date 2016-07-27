@@ -20,28 +20,21 @@ layout (binding = 0) uniform UBO
 {
 	mat4 projection;
 	mat4 view;
+    float aspectratio;
 } ubo;
 
 void main () 
 {
         //gl_PointSize = ubo.pointSize;
 	outColor = inColor;
-        outAlpha = inAlpha;
+    outAlpha = inAlpha;
 	outType = inType;
 	outRotation = inRotation;
-	  
-        /*vec4 eyePos = ubo.modelview * vec4(inPos.xyz, 1.0);
-	vec4 projVoxel = ubo.projection * vec4(ubo.pointSize, ubo.pointSize, eyePos.z, eyePos.w);
-	vec2 projSize = ubo.viewportDim * projVoxel.xy / projVoxel.w;
-
-	outPointSize = inSize * 0.25 * (projSize.x + projSize.y);
-	
-        gl_PointSize = outPointSize;*/
 		
-        gl_Position = ubo.projection * ubo.view * vec4(inPos.xyz, 1.0);
+    gl_Position = ubo.projection * ubo.view * vec4(inPos.xyz, 1.0);
 	
 	float pointDist = (gl_Position.w == 0.0) ? 0.00001 : gl_Position.w;
 	
-        gl_PointSize = (((inSize * 2048.0 * 1.5) / pointDist) * 1.5);
+    gl_PointSize = (((inSize * 2048.0 * 1.5) / pointDist) * ubo.aspectratio);
 	
 }

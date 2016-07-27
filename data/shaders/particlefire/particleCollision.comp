@@ -9,7 +9,8 @@ struct BurningPoint
     vec4 basePos;
     vec4 normal;
     vec4 baseNorm;
-    uvec4 bob;
+    vec2 uv;
+    vec2 life;
     uvec4 boby;
     uvec4 bobb;
     uvec2 bobb3;
@@ -20,12 +21,11 @@ struct BurningPoint
 struct Particle {
     vec4 pos;
     vec4 color;
+    vec4 vel;
     float alpha;
     float size;
     float rotation;
     uint type;
-    // Attributes not used in shader
-    vec4 vel;
 };
 
 layout(std140, binding = 0) buffer Bumbo
@@ -57,7 +57,7 @@ layout (local_size_x = 512) in;
 void main() 
 {
     uint index = gl_GlobalInvocationID.x;
-    if (index >= ubo.pCount)
+    if (index >= ubo.pCount || particles[index].size<=0.0f)
         return;
     int cindex;
     ivec4 gIndex = ivec4(particles[index].pos*20);
@@ -70,8 +70,8 @@ void main()
                     cindex = cells[cindex];
                     if(cindex>=0 && cindex<ubo.bCount){
                         
-                        if(bPoints[cindex].heat<75.0f)
-                            bPoints[cindex].heat+=0.02f;
+                        if(bPoints[cindex].heat<bPoints[cindex].life.y)
+                            bPoints[cindex].heat+=0.07f;
                         particles[index].pos += bPoints[cindex].normal*0.005f;
                     }
                 }

@@ -28,6 +28,22 @@ struct BurningPoint{
     float heat;
 };
 
+struct SceneMaterial
+{
+    //Les points brulent pendant combien de secondes.
+    float life;
+    //Quel chaleur pour que le materiaux brûle.
+    float burnHeat;
+    float mass;
+};
+
+struct Vertex
+{
+    glm::vec3 pos;
+    glm::vec2 uv;
+    glm::vec3 normal;
+};
+
 class VulkanObject
 {
 protected:
@@ -37,15 +53,9 @@ protected:
     uint32_t offset;
     uint32_t burnStart;
     uint32_t burnCount;
+    SceneMaterial material;
 
     bool burnable;
-
-    struct Vertex
-    {
-        glm::vec3 pos;
-        glm::vec2 uv;
-        glm::vec3 normal;
-    };
 
     std::vector<uint32_t> indices;
     struct {
@@ -72,7 +82,7 @@ protected:
         uint32_t p3index;
 
         u = glm::normalize(v2.pos-v1.pos);
-        w = v1.normal;
+        w = glm::normalize(glm::cross(v3.pos-v1.pos,u));
         v = glm::cross(u,w);
 
         mat = glm::mat3();
@@ -84,10 +94,15 @@ protected:
         matt =glm::transpose(mat);
         a = matt*v1.pos;
         vPoints.push_back(Point2(a.x,a.y));
+        //std::cout<<"poit1 " << a.x << " " <<a.y << std::endl;
         a = matt*v2.pos;
         vPoints.push_back(Point2(a.x,a.y));
+        //std::cout<<"poit2 " << a.x << " " <<a.y << std::endl;
+
         a = matt*v3.pos;
         vPoints.push_back(Point2(a.x,a.y));
+        //std::cout<<"poit3 " << a.x << " " <<a.y << std::endl;
+
         z=a.z;
         dt.insert(vPoints);
         for(int j=0;j<3;j++){
@@ -116,7 +131,7 @@ protected:
             bp.baseNorm = bp.normal = glm::vec4(v1.normal,0.0f);
             bp.uvCoord = getUv(v1,v2,v3,a);
             bp.nCount = 0;
-            bp.life.x=14.0f;
+            bp.life = glm::vec2(material.life, material.burnHeat);
             bp.heat = 0.0f;
             allPoints.push_back(bp);
         }
@@ -145,7 +160,6 @@ protected:
     void prepareIdex(VkQueue queue){
 
         uint32_t storageBufferSize = indices.size()*sizeof(uint32_t);
-        std::cout << "indice size "<< storageBufferSize<<std::endl;
         struct {
             VkDeviceMemory memory;
             VkBuffer buffer;
@@ -189,7 +203,7 @@ public:
         memcpy(pBurn+offset, &model, sizeof(model));
     }
 
-    VulkanObject(VkDevice mdevice, VulkanExampleBase *mexample, glm::mat4 startModel, bool burn) : device(mdevice), exampleBase(mexample), burnable(burn), model(startModel){
+    VulkanObject(VkDevice mdevice, VulkanExampleBase *mexample, glm::mat4 startModel, SceneMaterial materiaux) : device(mdevice), exampleBase(mexample), material(materiaux), model(startModel){
 
     }
 

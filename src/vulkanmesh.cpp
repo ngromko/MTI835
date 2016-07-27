@@ -4,13 +4,25 @@ Gère la création d'objets à partir du fichiers externe.
 
 #include "VulkanMesh.h"
 
-VulkanMesh::VulkanMesh(VkDevice mdevice, VulkanExampleBase *mexample,VkQueue queue, std::vector<unsigned int> Indices, bool burnable, glm::mat4 startModel, float mass, uint32_t objectNumber, uint32_t bPointStart, std::vector<BurningPoint> & bPoints): VulkanObject(mdevice,mexample,startModel,burnable)
+VulkanMesh::VulkanMesh(VkDevice mdevice, VulkanExampleBase *mexample,VkQueue queue, std::vector<unsigned int> Indices, SceneMaterial mater, glm::mat4 startModel, uint32_t objectNumber, uint32_t bPointStart, std::vector<BurningPoint> & bPoints): VulkanObject(mdevice,mexample,startModel,mater)
 {
     indices=Indices;
     burnStart = bPointStart;
     burnCount = bPoints.size()-burnStart;
-    std::cout<< " mesh " << burnStart << " " << burnCount<< objectNumber<<std::endl;
-    prepareRigidBody(bPoints, startModel, mass, objectNumber);
+    prepareRigidBody(bPoints, startModel, objectNumber);
+    prepareIdex(queue);
+}
+
+VulkanMesh::VulkanMesh(VkDevice mdevice, VulkanExampleBase *mexample,VkQueue queue, std::vector<Vertex> vBuffer, SceneMaterial mater, glm::mat4 startModel, uint32_t objectNumber, uint32_t bPointStart, std::vector<BurningPoint> & bPoints): VulkanObject(mdevice,mexample,startModel,mater)
+{
+
+    burnStart = bPointStart;
+    for(int i=0;i<vBuffer.size();i+=3){
+        triangulate(vBuffer[i],vBuffer[i+1],vBuffer[i+2],bPoints);
+    }
+
+    burnCount = bPoints.size()-burnStart;
+    prepareRigidBody(bPoints, startModel, objectNumber);
     prepareIdex(queue);
 }
 
@@ -18,7 +30,7 @@ VulkanMesh::~VulkanMesh()
 {
 }
 
-void VulkanMesh::prepareRigidBody(std::vector<BurningPoint>& bPoints, glm::mat4 startPos, float mass, uint32_t objectNumber){
+void VulkanMesh::prepareRigidBody(std::vector<BurningPoint>& bPoints, glm::mat4 startPos, uint32_t objectNumber){
 
     btConvexHullShape* groundShape = new btConvexHullShape();
 
@@ -36,7 +48,7 @@ void VulkanMesh::prepareRigidBody(std::vector<BurningPoint>& bPoints, glm::mat4 
                 }
             }
         }
-        bPoints[i].life.x=burnable?14.0f:-1.0f;
+        bPoints[i].life = glm::vec2(material.life, material.burnHeat);
         bPoints[i].heat = 0.0f;
         bPoints[i].nCount+=objectNumber<<16;
         groundShape->addPoint(btVector3(bPoints[i].pos.x,bPoints[i].pos.y,bPoints[i].pos.z));
@@ -53,10 +65,10 @@ void VulkanMesh::prepareRigidBody(std::vector<BurningPoint>& bPoints, glm::mat4 
     groundTransform.setOrigin(btVector3(startPos[3].x,startPos[3].y,startPos[3].z));
 
     VkObjectMotionState* myMotionState = new VkObjectMotionState(groundTransform,this);
-    if(mass!=0){
-        groundShape->calculateLocalInertia(mass,localInertia);
+    if(material.mass!=0){
+        groundShape->calculateLocalInertia(material.mass,localInertia);
     }
 
-    btRigidBody::btRigidBodyConstructionInfo rbInfo(mass,myMotionState,groundShape,localInertia);
+    btRigidBody::btRigidBodyConstructionInfo rbInfo(material.mass,myMotionState,groundShape,localInertia);
     rbody = new btRigidBody(rbInfo,true);
 }

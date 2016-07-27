@@ -6,12 +6,11 @@
 struct Particle {
     vec4 pos;
     vec4 color;
+    vec4 vel;
     float alpha;
     float size;
     float rotation;
     uint type;
-    // Attributes not used in shader
-    vec4 vel;
 };
 
 layout(std140, binding = 0) buffer Bumbo
@@ -40,15 +39,10 @@ void main()
     // Current SSBO index
     uint index = gl_GlobalInvocationID.x;
 	// Don't try to write beyond particle count
-    if (index >= ubo.pCount)
+    if (index >= ubo.pCount || particles[index].size<-1.0f)
         return;
     float particleTimer = ubo.deltaT * 0.45f;
-    //particles[index].alpha =3.0f;//+= particleTimer * 2.5f;
-    //particles[index].size =3.0f;// particleTimer * 0.5f;
-    //particles[index].vel+= vec4(0.0f,-9.8f,0.0f,0.0f);
+    particles[index].size -=particleTimer * 0.45f;
     particles[index].pos += particles[index].vel *particleTimer ;
-    //particles[index].bob = vec2(3.0f,4.0f);//,3.0f,10.0f);
-    //particles[index].rotationSpeed =5.0f;
-    //particles[index].index = 4.0f;
 }
 

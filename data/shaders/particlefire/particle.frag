@@ -18,7 +18,6 @@ layout (location = 0) out vec4 outFragColor;
 void main () 
 {
 	vec4 color;
-	float alpha = (inAlpha <= 1.0) ? inAlpha : 2.0 - inAlpha;
 	
 	// Rotate texture coordinates
 	// Rotate UV	
@@ -26,8 +25,8 @@ void main ()
 	float rotCos = cos(inRotation);
 	float rotSin = sin(inRotation);
     vec2 rotUV = vec2(
-		rotCos * (gl_PointCoord.x - rotCenter) + rotSin * (gl_PointCoord.y - rotCenter) + rotCenter,
-		rotCos * (gl_PointCoord.y - rotCenter) - rotSin * (gl_PointCoord.x - rotCenter) + rotCenter);
+    rotCos * (gl_PointCoord.x - rotCenter) + rotSin * (gl_PointCoord.y - rotCenter) + rotCenter,
+    rotCos * (gl_PointCoord.y - rotCenter) - rotSin * (gl_PointCoord.x - rotCenter) + rotCenter);
 
 	
 	if (inType == 0) 
@@ -40,8 +39,8 @@ void main ()
 	{
 		// Smoke
 		color = texture(samplerSmoke, rotUV);
-		outFragColor.a = color.a * alpha;
+		outFragColor.a = color.a * inAlpha;
 	}
 	
-	outFragColor.rgb = color.rgb * inColor.rgb * alpha;	
+	outFragColor.rgb = color.rgb * inColor.rgb * inAlpha;	
 }

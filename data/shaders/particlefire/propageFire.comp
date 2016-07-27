@@ -3,16 +3,17 @@
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_ARB_shading_language_420pack : enable
 
+#define PARTICLE_TYPE_FLAME 0
+#define PARTICLE_TYPE_SMOKE 1
+
 struct Particle {
     vec4 pos;
     vec4 color;
-    vec4 color1;
-    /*float alpha;
+    vec4 vel;
+    float alpha;
     float size;
     float rotation;
-    uint type;*/
-    // Attributes not used in shader
-    vec4 vel;
+    uint type;
 };
 
 struct BurningPoint
@@ -61,18 +62,20 @@ void main()
     
     uint ncount = me.nCount&15;
 
-    if(me.heat>=75.0f && me.life.x>0.0f){
+    if(me.heat>=me.life.y && me.life.x>0.0f){
         for(int i=0;i<ncount;i++){
-            if(bPoints[me.neighs[i]].heat<=75.0f){
+            if(bPoints[me.neighs[i]].heat<=me.life.y){
                 bPoints[me.neighs[i]].heat+=0.02f+sign(bPoints[me.neighs[i]].pos.y - me.pos.y)*0.01f;
             }
         }
         me.heat+=ubo.deltaT;
         me.life.x-=ubo.deltaT;
-        if(me.heat>75.5f){
+        if(me.heat>me.life.y+0.75f){
             particles[index].pos=bPoints[index].pos;
-            me.heat=75.0f;
+            me.heat=me.life.y;
+            particles[index].size=0.2f;
         }
+        particles[index].type = uint(me.heat>me.life.y+0.5f);
         bPoints[index].heat=me.heat;
         bPoints[index].life.x=me.life.x;
     }

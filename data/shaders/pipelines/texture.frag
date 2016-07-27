@@ -1,9 +1,9 @@
 #version 450
 
-layout (binding = 1) uniform sampler2D colorMap;
-layout (binding = 2) uniform sampler2D burn;
-layout (binding = 3) uniform samplerCube shadowMaps;
-layout (binding = 4) buffer Lights 
+layout (set = 1, binding = 1) uniform sampler2D colorMap;
+layout (set = 0,binding = 2) uniform sampler2D burn;
+layout (set = 0,binding = 3) uniform samplerCube shadowMaps;
+layout (set = 0,binding = 4) buffer Lights 
 {
 	vec4 lights[];
 };
@@ -46,6 +46,5 @@ void main()
         outFragColor.rgb += max(dot(N,L), 0.1) * color;
     }
     outFragColor.rgb*=pushConsts.lFactor;
-    /*outFragColor.x=dist/10.0f;outFragColor.z = sampledDist/15.0f;*/
 }
   

@@ -26,9 +26,10 @@ class VulkanMesh : public VulkanObject
 {
 private:
     bool selectable;    
-    void prepareRigidBody(std::vector<BurningPoint> &bPoints, glm::mat4 startPos, float mass, uint32_t objectNumber);
+    void prepareRigidBody(std::vector<BurningPoint> &bPoints, glm::mat4 startPos, uint32_t objectNumber);
 public:
     ~VulkanMesh();
-    VulkanMesh(VkDevice mdevice, VulkanExampleBase *mexample, VkQueue queue, std::vector<unsigned int> Indices, bool burnable, glm::mat4 atartModel, float mass, uint32_t objectNumber, uint32_t bPointStart, std::vector<BurningPoint> &bPoints);
+    VulkanMesh(VkDevice mdevice, VulkanExampleBase *mexample, VkQueue queue, std::vector<unsigned int> Indices, SceneMaterial mater, glm::mat4 startModel, uint32_t objectNumber, uint32_t bPointStart, std::vector<BurningPoint> &bPoints);
+    VulkanMesh(VkDevice mdevice, VulkanExampleBase *mexample, VkQueue queue, std::vector<Vertex> vBuffer, SceneMaterial mater, glm::mat4 startModel, uint32_t objectNumber, uint32_t bPointStart, std::vector<BurningPoint> &bPoints);
 };
 

@@ -656,23 +656,14 @@ public:
 
         std::vector<glm::vec3> getAllFaces(glm::vec3 scale){
             std::vector<glm::vec3> result;
-            std::cout<<"isize " << m_Entries[0].Indices.size() << std::endl;
-            std::cout<<"isize " << m_Entries[0].Vertices.size() << std::endl;
 
             for (int i = 0; i < m_Entries[0].Vertices.size(); i+=3)
             {
-                /*result.push_back(m_Entries[0].Vertices[m_Entries[0].Indices[i]].m_pos);
-                result.push_back(m_Entries[0].Vertices[m_Entries[0].Indices[i+1]].m_pos);
-                result.push_back(m_Entries[0].Vertices[m_Entries[0].Indices[i+2]].m_pos);
-                result.push_back(m_Entries[0].Vertices[m_Entries[0].Indices[i+2]].m_normal);*/
-
-
                 result.push_back(m_Entries[0].Vertices[i].m_pos*scale);
                 result.push_back(m_Entries[0].Vertices[i+1].m_pos*scale);
                 result.push_back(m_Entries[0].Vertices[i+2].m_pos*scale);
                 result.push_back(m_Entries[0].Vertices[i].m_normal);
 
-                //std::cout<<"isize " << m_Entries[0].Vertices[i].m_pos.x << " "<<m_Entries[0].Vertices[i].m_pos.y<<" "<<m_Entries[0].Vertices[i].m_pos.z << std::endl;
             }
             return result;
         }

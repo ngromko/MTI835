@@ -35,12 +35,12 @@
 struct Particle {
 	glm::vec4 pos;
 	glm::vec4 color;
+    glm::vec4 vel;
 	float alpha;
 	float size;
 	float rotation;
-	uint32_t type;
+    int type;
 	// Attributes not used in shader
-    glm::vec4 vel;
 };
 
 class VulkanFire
@@ -50,6 +50,7 @@ private:
     struct{
         glm::mat4 projection;
         glm::mat4 view;
+        float AR;
     } ubo;
 
     VkDevice device;

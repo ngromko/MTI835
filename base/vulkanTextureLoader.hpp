@@ -102,7 +102,6 @@ namespace vkTools
 
 			texture->width = (uint32_t)tex2D[0].dimensions().x;
 			texture->height = (uint32_t)tex2D[0].dimensions().y;
-                        std::cout<<"tex dim " << texture->width << " " << texture->height << std::endl;
 			texture->mipLevels = tex2D.levels();
 
 			// Get device properites for the requested texture format

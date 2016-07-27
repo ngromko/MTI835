@@ -967,7 +967,6 @@ void VulkanExampleBase::setupConsole(std::string title)
 
 HWND VulkanExampleBase::setupWindow(HINSTANCE hinstance, WNDPROC wndproc)
 {
-    std::cout<<"allo"<<std::endl;
 	this->windowInstance = hinstance;
 
 	bool fullscreen = false;

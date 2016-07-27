@@ -30,6 +30,33 @@
 #define FB_DIM TEX_DIM
 #define FB_COLOR_FORMAT VK_FORMAT_R32_SFLOAT
 
+// Framebuffer for offscreen rendering
+struct FrameBufferAttachment {
+    VkImage image;
+    VkDeviceMemory mem;
+    VkImageView view;
+    VkFormat format;
+};
+struct FrameBuffer {
+    int32_t width, height;
+    VkFramebuffer frameBuffer;
+    std::vector<FrameBufferAttachment> attachments;
+    VkRenderPass renderPass;
+    VkSampler sampler;
+    void FreeResources(VkDevice device)
+    {
+        for (auto attachment : attachments)
+        {
+            vkDestroyImage(device, attachment.image, nullptr);
+            vkDestroyImageView(device, attachment.view, nullptr);
+            vkFreeMemory(device, attachment.mem, nullptr);
+        }
+        vkDestroySampler(device, sampler, nullptr);
+        vkDestroyRenderPass(device, renderPass, nullptr);
+        vkDestroyFramebuffer(device, frameBuffer, nullptr);
+    }
+};
+
 class Shadow
 {
 private:
@@ -56,18 +83,7 @@ private:
 
     vkTools::VulkanTexture shadowCubeMap;
 
-    // Framebuffer for offscreen rendering
-    struct FrameBufferAttachment {
-        VkImage image;
-        VkDeviceMemory mem;
-        VkImageView view;
-    };
-    struct FrameBuffer {
-        int32_t width, height;
-        VkFramebuffer frameBuffer;
-        FrameBufferAttachment color, depth;
-        VkRenderPass renderPass;
-    } offScreenFrameBuf;
+    FrameBuffer offScreenFrameBuf;
 
     struct PConst {
         glm::mat4 viewMatrix;
@@ -75,11 +91,10 @@ private:
     }pCostant;
 
     //VkCommandBuffer offScreenCmdBuffer = VK_NULL_HANDLE;
-    VkFormat fbDepthFormat;
 
     void Shadow::prepareCubeMap(VkQueue queue);
-    void prepareOffscreenFramebuffer(VkQueue queue);
-    void prepareOffscreenRenderpass();
+    void prepareOffscreenFramebuffer(VkQueue queue, VkFormat fbDepthFormat);
+    void prepareOffscreenRenderpass(VkFormat fbDepthFormat);
     void prepareUniformBuffers();
     void updateCubeFace(uint32_t faceIndex, uint32_t light, std::vector<VulkanObject *> objects, VkBuffer *points);
     void preparePipeline(VkPipelineVertexInputStateCreateInfo *verticesState);

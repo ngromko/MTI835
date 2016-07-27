@@ -42,8 +42,7 @@ private:
     vkTools::VulkanTexture metal;
     vkTools::VulkanTexture burn;
     vkTools::VulkanTexture armorTexture;
-    vkMeshLoader::MeshBuffer armorMesh;
-    vkMeshLoader::MeshBuffer cylinder;
+    vkMeshLoader::MeshBuffer quad;
 
     struct {
         vkTools::UniformData scene;
@@ -67,37 +66,13 @@ private:
     struct{
         glm::mat4 projection;
         glm::mat4 view;
-        //uint32_t light=0;
+        float AR;
     } ubo;
-
-    // Shader properites for a material
-    // Will be passed to the shaders using push constant
-    struct SceneMaterialProperites
-    {
-        glm::vec4 ambient;
-        glm::vec4 diffuse;
-        glm::vec4 specular;
-    };
-
-    // Stores info on the materials used in the scene
-    struct SceneMaterial
-    {
-        std::string name;
-        // Material properties
-        SceneMaterialProperites properties;
-        // The example only uses a diffuse channel
-        vkTools::VulkanTexture diffuse;
-        // The material's descriptor contains the material descriptors
-        VkDescriptorSet descriptorSet;
-        // Pointer to the pipeline used by this material
-        VkPipeline *pipeline;
-    };
 
     std::vector<glm::vec4> lights;
 
     struct Light{
        glm::vec4 pos;
-
     };
 
     glm::vec4 getRayTo(float x, float y){
@@ -143,26 +118,49 @@ public:
 
     btDiscreteDynamicsWorld* dynamicsWorld;
 
-    std::vector<VulkanObject*> cubes;
+    std::vector<VulkanObject*> papers;
+    std::vector<VulkanObject*> woods;
+    std::vector<VulkanObject*> metals;
+    std::vector<VulkanObject*> allObjects;
+
     VulkanFire* fire;
     VkCommandBuffer computeCommand;
+    //VkCommandBuffer deferred;
     VkSubmitInfo computeSubmitInfo;
     int stop=0;
 
     struct {
         VkPipelineLayout scene;
+        VkPipelineLayout deferred;
     } pipelineLayouts;
 
     struct {
         VkDescriptorSet scene;
+        VkDescriptorSet paper;
+        VkDescriptorSet wood;
+        VkDescriptorSet metal;
     } descriptorSets;
+
 	VkDescriptorSetLayout descriptorSetLayout;
-    VkDescriptorSet sceneDescSet;
+    VkDescriptorSetLayout descriptorSetLayoutMeterial;
+
 
     struct {
         VkPipeline scene;
+        VkPipeline deferred;
         VkPipeline blend;
     } pipelines;
+
+    struct{
+        SceneMaterial papier = {4.0f,30.0f,1.0f};
+        SceneMaterial bois = {15.0f,75.0f,5.0f};
+        SceneMaterial metal = {-1.0f,100.0f,10.0f};
+        SceneMaterial papierStatic = {-4.0f,30.0f,0.0f};
+        SceneMaterial boisStatic = {15.0f,75.0f,0.0f};
+        SceneMaterial metalStatic = {-1.0f,100.0f,0.0f};
+    } materiaux;
+
+    FrameBuffer deferredFb;
 
     struct PConst {
         uint32_t index;
@@ -176,15 +174,19 @@ public:
 
 	VulkanExample() : VulkanExampleBase(ENABLE_VALIDATION)
 	{
-		zoom = -5.0f;
-        rotation = glm::vec3(0.0f, 0.0f, 0.0f);
+        zoom = -15.0f;
+        rotation = glm::vec3(30.0f, 0.0f, 0.0f);
 		title = "Vulkan Example - Using pipelines";
-        for(int i=0;i<3;i++){
+
+        for(int i=0;i<5;i++){
             float x= -5.0f + 25.0f*(rand() / double(RAND_MAX));
             float z= -5.0f + 25.0f*(rand() / double(RAND_MAX));
 
             lights.push_back(glm::vec4(x,10.0f,z,1.0f));
         }
+        lights.push_back(glm::vec4(15.0f,5.0f,5.0f,1.0f));
+        lights.push_back(glm::vec4(5.0f,5.0f,15.0f,1.0f));
+
         pCostant.factor = 1.0f/lights.size();
 	}
 
@@ -207,6 +209,7 @@ public:
         //vkDestroyPipelineLayout(device, pipelineLayouts., nullptr);
 
         vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
+        vkDestroyDescriptorSetLayout(device, descriptorSetLayoutMeterial, nullptr);
 
         textureLoader->destroyTexture(wood);
         textureLoader->destroyTexture(armorTexture);
@@ -214,6 +217,9 @@ public:
         textureLoader->destroyTexture(burn);
         textureLoader->destroyTexture(textures.smoke);
         textureLoader->destroyTexture(textures.fire);
+
+        //deferredFb.FreeResources(device);
+        //vkMeshLoader::freeMeshBufferResources(device, &quad);
 
         vkUnmapMemory(device, uniformData.objectsUniforme.memory);
 
@@ -231,6 +237,11 @@ public:
             getAssetPath() + "textures/crate_bc3.ktx",
             VK_FORMAT_BC3_UNORM_BLOCK,
             &wood);
+
+        textureLoader->loadTexture(
+            getAssetPath() + "textures/darkmetal_bc3.ktx",
+            VK_FORMAT_BC3_UNORM_BLOCK,
+            &metal);
 
         // Particles
         textureLoader->loadTexture(
@@ -254,7 +265,7 @@ public:
 
 
         textureLoader->loadTexture(
-            getAssetPath() + "textures/burned2.dds",
+            getAssetPath() + "textures/burned.dds",
             VK_FORMAT_BC3_UNORM_BLOCK,
             &burn);
 
@@ -310,6 +321,8 @@ public:
         renderPassBeginInfo.renderArea.extent.width = width;
         renderPassBeginInfo.renderArea.extent.height = height;
 
+        VkDescriptorSet sets[2] =  {descriptorSets.scene,descriptorSets.paper};
+
         VkResult err;
 
         for (int32_t i = 0; i < drawCmdBuffers.size(); ++i)
@@ -333,7 +346,7 @@ public:
             err = vkBeginCommandBuffer(drawCmdBuffers[i], &cmdBufInfo);
             assert(!err);
 
-            shadow->buildOffscreenCommandBuffer(drawCmdBuffers[i],cubes,&bPointsStorageBuffer.buffer,0);
+            shadow->buildOffscreenCommandBuffer(drawCmdBuffers[i],allObjects,&bPointsStorageBuffer.buffer,0);
 
             renderPassBeginInfo.clearValueCount = 2;
             renderPassBeginInfo.pClearValues = clearValues;
@@ -344,7 +357,6 @@ public:
 
             vkCmdSetViewport(drawCmdBuffers[i], 0, 1, &viewport);
             vkCmdSetScissor(drawCmdBuffers[i], 0, 1, &scissor);
-            vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayouts.scene, 0, 1, &sceneDescSet, 0, NULL);
             vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.scene);
 
             pCostant.index=0;
@@ -357,7 +369,26 @@ public:
                 8,
                 &pCostant);
 
-            for (auto& cube : cubes)
+            sets[1] = descriptorSets.paper;
+            vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayouts.scene, 0, 2,sets , 0, NULL);
+
+            for (auto& cube : papers)
+            {
+                cube->draw(drawCmdBuffers[i], &bPointsStorageBuffer.buffer);
+            }
+
+            sets[1] = descriptorSets.wood;
+            vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayouts.scene, 0, 2,sets , 0, NULL);
+
+            for (auto& cube : woods)
+            {
+                cube->draw(drawCmdBuffers[i], &bPointsStorageBuffer.buffer);
+            }
+
+            sets[1] = descriptorSets.metal;
+            vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayouts.scene, 0, 2,sets , 0, NULL);
+
+            for (auto& cube : metals)
             {
                 cube->draw(drawCmdBuffers[i], &bPointsStorageBuffer.buffer);
             }
@@ -371,13 +402,12 @@ public:
 
                 vkCmdEndRenderPass(drawCmdBuffers[i]);
 
-                shadow->buildOffscreenCommandBuffer(drawCmdBuffers[i],cubes,&bPointsStorageBuffer.buffer,j);
+                shadow->buildOffscreenCommandBuffer(drawCmdBuffers[i],allObjects,&bPointsStorageBuffer.buffer,j);
 
                 vkCmdBeginRenderPass(drawCmdBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
                 vkCmdSetViewport(drawCmdBuffers[i], 0, 1, &viewport);
                 vkCmdSetScissor(drawCmdBuffers[i], 0, 1, &scissor);
-                vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayouts.scene, 0, 1, &sceneDescSet, 0, NULL);
                 vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.blend);
 
                 pCostant.index=j;
@@ -390,7 +420,26 @@ public:
                     8,
                     &pCostant);
 
-                for (auto& cube : cubes)
+                sets[1] = descriptorSets.paper;
+                vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayouts.scene, 0, 2,sets , 0, NULL);
+
+                for (auto& cube : papers)
+                {
+                    cube->draw(drawCmdBuffers[i], &bPointsStorageBuffer.buffer);
+                }
+
+                sets[1] = descriptorSets.wood;
+                vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayouts.scene, 0, 2,sets , 0, NULL);
+
+                for (auto& cube : woods)
+                {
+                    cube->draw(drawCmdBuffers[i], &bPointsStorageBuffer.buffer);
+                }
+
+                sets[1] = descriptorSets.metal;
+                vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayouts.scene, 0, 2,sets , 0, NULL);
+
+                for (auto& cube : metals)
                 {
                     cube->draw(drawCmdBuffers[i], &bPointsStorageBuffer.buffer);
                 }
@@ -418,11 +467,39 @@ public:
         ///the default constraint solver. For parallel processing you can use a different solver (see Extras/BulletMultiThreaded)
         btSequentialImpulseConstraintSolver* solver = new btSequentialImpulseConstraintSolver;
 
+        btCollisionShape* plan1 = new btStaticPlaneShape(btVector3(-1,0,0),-10);
+        btRigidBody::btRigidBodyConstructionInfo
+                        groundRigidBodyCI1(0, NULL, plan1, btVector3(0, 0, 0));
+
+        btRigidBody* rp1 = new btRigidBody(groundRigidBodyCI1);
+
+        btCollisionShape* plan2 = new btStaticPlaneShape(btVector3(1,0,0),0);
+        btRigidBody::btRigidBodyConstructionInfo
+                        groundRigidBodyCI2(0, NULL, plan2, btVector3(0, 0, 0));
+
+          btRigidBody* rp2 = new btRigidBody(groundRigidBodyCI2);
+
+        btCollisionShape* plan3 = new btStaticPlaneShape(btVector3(0,0,-1),-10);
+        btRigidBody::btRigidBodyConstructionInfo
+                        groundRigidBodyCI3(0, NULL, plan3, btVector3(0, 0, 0));
+
+          btRigidBody* rp3 = new btRigidBody(groundRigidBodyCI3);
+
+        btCollisionShape* plan4 = new btStaticPlaneShape(btVector3(0,0,1),0);
+        btRigidBody::btRigidBodyConstructionInfo
+                        groundRigidBodyCI4(0, NULL, plan4, btVector3(0, 0, 0));
+
+        btRigidBody* rp4 = new btRigidBody(groundRigidBodyCI4);
+
         dynamicsWorld = new btDiscreteDynamicsWorld(dispatcher,overlappingPairCache,solver,collisionConfiguration);
 
         dynamicsWorld->setGravity(btVector3(0,-2,0));
+        dynamicsWorld->addRigidBody(rp1);
+        dynamicsWorld->addRigidBody(rp2);
+        dynamicsWorld->addRigidBody(rp3);
+        dynamicsWorld->addRigidBody(rp4);
 
-        for (auto& cube : cubes)
+        for (auto& cube : allObjects)
         {
             dynamicsWorld->addRigidBody(cube->getRigidBody());
         }
@@ -470,63 +547,28 @@ public:
 	{
         fire=new VulkanFire(device,this);
         glm::mat4 cubeModel;
-        cubeModel = glm::translate(glm::mat4(),glm::vec3(5,-0.1,5));
 
         uint32_t objectNumber=0;
-        std::cout <<" errrrre "<< bPoints.size() << std::endl;
-        cubes.push_back(new VulkanCube(device,this,queue,glm::vec3(15.0,1.1,15.0),cubeModel,false,0,objectNumber++,bPoints));
-        cubeModel = glm::translate(glm::mat4(),glm::vec3(15.0f,2.0f,5.0f));
-        cubes.push_back(new VulkanCube(device,this,queue,glm::vec3(0.5f,0.5f,0.5f),cubeModel,true,1,objectNumber++,bPoints));
-        cubeModel = glm::translate(glm::mat4(),glm::vec3(-5.0f,2.0f,5.0f));
-        cubes.push_back(new VulkanCube(device,this,queue,glm::vec3(1.0f,1.0f,1.0f),cubeModel,true,2,objectNumber++,bPoints));
+        cubeModel = glm::translate(glm::mat4(),glm::vec3(5,-1,5));
+        metals.push_back(new VulkanCube(device,this,queue,glm::vec3(6.0,1,6.0),cubeModel,materiaux.metalStatic,objectNumber++,bPoints));
+        cubeModel = glm::translate(glm::mat4(),glm::vec3(-1,5,5));
+        metals.push_back(new VulkanCube(device,this,queue,glm::vec3(1,6.0,6.0),cubeModel,materiaux.metalStatic,objectNumber++,bPoints));
+        cubeModel = glm::translate(glm::mat4(),glm::vec3(5,5,-1));
+        metals.push_back(new VulkanCube(device,this,queue,glm::vec3(6.0,6.0,1.0),cubeModel,materiaux.metalStatic,objectNumber++,bPoints));
+
+        cubeModel = glm::translate(glm::mat4(),glm::vec3(8.0f,2.0f,8.0f));
+        papers.push_back(new VulkanCube(device,this,queue,glm::vec3(0.5f,0.5f,0.5f),cubeModel,materiaux.papier,objectNumber++,bPoints));
+        cubeModel = glm::translate(glm::mat4(),glm::vec3(2.0f,6.0f,2.0f));
+        papers.push_back(loadBurningMesh(getAssetPath() + "models/armor/cylinder.obj", glm::vec3(0.10f,-0.10f,0.10f), cubeModel, materiaux.papier, objectNumber++));
+
         cubeModel = glm::translate(glm::mat4(),glm::vec3(5.0f,2.0f,15.0f));
-        cubes.push_back(new VulkanCube(device,this,queue,glm::vec3(1.5f,1.5f,1.5f),cubeModel,true,1,objectNumber++,bPoints));
-        cubeModel = glm::translate(glm::mat4(),glm::vec3(5.0f,2.0f,-5.0f));
-        cubes.push_back(new VulkanCube(device,this,queue,glm::vec3(2.0f,2.0f,2.0f),cubeModel,true,2,objectNumber++,bPoints));
-        cubeModel = glm::translate(glm::mat4(),glm::vec3(5.0f,30.0f,5.0f));
-        //cubes.push_back(new VulkanCube(device,this,queue,glm::vec3(15.0,1.1,15.0),cubeModel,false,0,objectNumber++,bPoints));
-        /*std::cout <<" geagsres "<< bPoints.size() << std::endl;
-        for(int i = 0;i<5;i++){
-            for(int j = 0;j<5;j++){
-                for(int k = 1;k<3;k++){
-                    cubeModel = glm::translate(glm::mat4(),glm::vec3(0.5+i*2,0.6+k*2,0.5+j*2));
-                    cubes.push_back(new VulkanCube(device,this,queue,glm::vec3(0.5f,0.5f,0.5f),cubeModel,true,1,objectNumber++,bPoints));
-               }
-          }
-        }*/
+        woods.push_back(new VulkanCube(device,this,queue,glm::vec3(1.0f,1.0f,1.0f),cubeModel,materiaux.bois,objectNumber++,bPoints));
+        cubeModel = glm::translate(glm::mat4(),glm::vec3(5.0f,6.0f,5.0f));
+        woods.push_back(loadBurningMesh(getAssetPath() + "models/armor/torus.obj", glm::vec3(0.10f,-0.10f,0.10f), cubeModel, materiaux.bois, objectNumber++));
 
-        //loadBurningMesh(getAssetPath() + "models/armor/armor.dae", glm::vec3(1.0f,-1.0f,1.0f), &objectNumber);
-
-
-        /*std::cout<<"allossize " << allo.size()<<std::endl;
-        fire->addBurningPoints(allo,objnumber++);
-        cubeModel = glm::translate(glm::mat4(),glm::vec3(5,13,5));
-
-        burningCubes.push_back(new VulkanMesh(device,this,&armorMesh,&armorTexture,cubeModel, 1, allo));
-
-        loadMesh(getAssetPath() + "models/armor/cylinder.obj", &cylinder, vertexLayout, glm::vec3(0.1f,-0.1f,0.1f), allo);
-
-
-        std::cout<<"allossize " << allo.size()<<std::endl;
-        fire->addBurningPoints(allo,objnumber++);
-        cubeModel = glm::translate(glm::mat4(),glm::vec3(2,13,2));
-
-        burningCubes.push_back(new VulkanMesh(device,this,&cylinder,&armorTexture,cubeModel, 1, allo));*/
-
-
-        /*burningCubes.push_back(new VulkanCube(device,this,glm::vec3(1.0f,1.5f,1.0f),glm::vec3(1,0,0),glm::vec3(6.5,1.5f,5),0,allo));
-
-        objectData.push_back(fire->addBurningPoints(allo,0));
-
-        burningCubes.push_back(new VulkanCube(device,this,glm::vec3(0.5,0.5,0.5),glm::vec3(0,0,1),glm::vec3(5,0.5f,5),0,allo));
-
-        objectData.push_back(fire->addBurningPoints(allo,1));
-
-        burningCubes.push_back(new VulkanCube(device,this,glm::vec3(0.5,0.5,0.5),glm::vec3(0,0,1),glm::vec3(6.5,4.5f,5),0,allo));
-
-        objectData.push_back(fire->addBurningPoints(allo,2));*/
-
-        //std::cout <<" errrrre "<< allo.size() << std::endl;
+        allObjects.insert(allObjects.end(),metals.begin(),metals.end());
+        allObjects.insert(allObjects.end(),papers.begin(),papers.end());
+        allObjects.insert(allObjects.end(),woods.begin(),woods.end());
     }
 
     void setupLights(){
@@ -589,7 +631,6 @@ public:
             VkDeviceMemory memory;
             VkBuffer buffer;
         } stagingBuffer;
-        std::cout<< "alloc burning" << std::endl;
         createBuffer(
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
@@ -605,7 +646,6 @@ public:
             nullptr,
             &bPointsStorageBuffer.buffer,
             &bPointsStorageBuffer.memory);
-std::cout<< "alloc burning " << sizeof(BurningPoint)<<std::endl;
         // Copy to staging buffer
         VkCommandBuffer copyCmd = createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
 
@@ -633,7 +673,7 @@ std::cout<< "alloc burning " << sizeof(BurningPoint)<<std::endl;
 
         // Attribute descriptions
         // Describes memory layout and shader positions
-        vertices.attributeDescriptions.resize(4);
+        vertices.attributeDescriptions.resize(5);
         // Location 0 : Position
         vertices.attributeDescriptions[0] =
             vkTools::initializers::vertexInputAttributeDescription(
@@ -662,13 +702,19 @@ std::cout<< "alloc burning " << sizeof(BurningPoint)<<std::endl;
                 3,
                 VK_FORMAT_R32_SFLOAT,
                 sizeof(float) * 31);
+        // Location 4 : MaxHeat
+        vertices.attributeDescriptions[4] =
+            vkTools::initializers::vertexInputAttributeDescription(
+                VERTEX_BUFFER_BIND_ID,
+                4,
+                VK_FORMAT_R32_SFLOAT,
+                sizeof(float) * 19);
 
         vertices.inputState = vkTools::initializers::pipelineVertexInputStateCreateInfo();
         vertices.inputState.vertexBindingDescriptionCount = vertices.bindingDescriptions.size();
         vertices.inputState.pVertexBindingDescriptions = vertices.bindingDescriptions.data();
         vertices.inputState.vertexAttributeDescriptionCount = vertices.attributeDescriptions.size();
         vertices.inputState.pVertexAttributeDescriptions = vertices.attributeDescriptions.data();
-        std::cout<< "alloc burning " << sizeof(BurningPoint)<<std::endl;
     }
 
 	void setupDescriptorPool()
@@ -693,18 +739,14 @@ std::cout<< "alloc burning " << sizeof(BurningPoint)<<std::endl;
 
 	void setupDescriptorSetLayout()
 	{
+
         std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings =
         {
             // Binding 0 : Vertex shader uniform buffer
             vkTools::initializers::descriptorSetLayoutBinding(
-            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                VK_SHADER_STAGE_VERTEX_BIT,
-                0),
-            // Binding 1 : Fragment shader image sampler normal texture
-            vkTools::initializers::descriptorSetLayoutBinding(
-                VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                VK_SHADER_STAGE_FRAGMENT_BIT,
-                1),
+                    VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                        VK_SHADER_STAGE_VERTEX_BIT,
+                        0),
             // Binding 2 : Fragment shader image sampler burned
             vkTools::initializers::descriptorSetLayoutBinding(
                 VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -715,7 +757,7 @@ std::cout<< "alloc burning " << sizeof(BurningPoint)<<std::endl;
                 VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 VK_SHADER_STAGE_FRAGMENT_BIT,
                 3),
-            // Binding 3 : Shadow maps
+            // Binding 4 : Lights
             vkTools::initializers::descriptorSetLayoutBinding(
                 VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                 VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -726,15 +768,31 @@ std::cout<< "alloc burning " << sizeof(BurningPoint)<<std::endl;
 			vkTools::initializers::descriptorSetLayoutCreateInfo(
 				setLayoutBindings.data(),
 				setLayoutBindings.size());
-std::cout<<"create"<<std::endl;
+
 		VkResult err = vkCreateDescriptorSetLayout(device, &descriptorLayout, nullptr, &descriptorSetLayout);
 		assert(!err);
-        std::cout<<"creat2e"<<std::endl;
+
+        // Binding 1 : Fragment shader image sampler normal texture// Binding 0 : Vertex shader uniform buffer
+        VkDescriptorSetLayoutBinding matLayoutBinding =
+                vkTools::initializers::descriptorSetLayoutBinding(
+                    VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                    VK_SHADER_STAGE_FRAGMENT_BIT,
+                    1);
+
+        descriptorLayout =
+            vkTools::initializers::descriptorSetLayoutCreateInfo(
+                &matLayoutBinding,
+                1);
+
+        err = vkCreateDescriptorSetLayout(device, &descriptorLayout, nullptr, &descriptorSetLayoutMeterial);
+        assert(!err);
+
+        VkDescriptorSetLayout layouts[2] = {descriptorSetLayout, descriptorSetLayoutMeterial};
 
 		VkPipelineLayoutCreateInfo pPipelineLayoutCreateInfo =
 			vkTools::initializers::pipelineLayoutCreateInfo(
-				&descriptorSetLayout,
-				1);
+                layouts,
+                2);
 
         // Push constants for cube map face view matrices
             VkPushConstantRange pushConstantRange =
@@ -747,23 +805,16 @@ std::cout<<"create"<<std::endl;
             pPipelineLayoutCreateInfo.pushConstantRangeCount = 1;
             pPipelineLayoutCreateInfo.pPushConstantRanges = &pushConstantRange;
 
-        std::cout<<"create"<<std::endl;
-
         err = vkCreatePipelineLayout(device, &pPipelineLayoutCreateInfo, nullptr, &pipelineLayouts.scene);
 		assert(!err);
-        std::cout<<"crea2te"<<std::endl;
 
 	}
 
     void setupDescriptorSets()
     {
-        std::cout<<"enter"<<std::endl;
 
-        std::cout<<"test"<<std::endl;
-        VkDeviceSize  size = 16*4*cubes.size();
+        VkDeviceSize  size = 16*4*allObjects.size();
         if(size>0){
-            std::cout<<"testicool "<<size<< std::endl;
-            std::cout<<size<<std::endl;
             createBuffer(
                 VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
@@ -779,20 +830,25 @@ std::cout<<"create"<<std::endl;
             VkResult err = vkMapMemory(device, uniformData.objectsUniforme.memory, 0, size, 0, (void **)&pData);
             assert(!err);
 
-            VkDescriptorSetAllocateInfo allocInfo =
-                vkTools::initializers::descriptorSetAllocateInfo(
-                    descriptorPool,
-                    &descriptorSetLayout,
-                    1);
-
-            VkResult vkRes = vkAllocateDescriptorSets(device, &allocInfo, &sceneDescSet);
-            assert(!vkRes);
-
             // Color map image descriptor
-            VkDescriptorImageInfo texDescriptorColorMap =
+            VkDescriptorImageInfo texDescriptorPaper =
                 vkTools::initializers::descriptorImageInfo(
                     paper.sampler,
                     paper.view,
+                    VK_IMAGE_LAYOUT_GENERAL);
+
+            // Color map image descriptor
+            VkDescriptorImageInfo texDescriptorWood =
+                vkTools::initializers::descriptorImageInfo(
+                    wood.sampler,
+                    wood.view,
+                    VK_IMAGE_LAYOUT_GENERAL);
+
+            // Color map image descriptor
+            VkDescriptorImageInfo texDescriptorMetal =
+                vkTools::initializers::descriptorImageInfo(
+                    metal.sampler,
+                    metal.view,
                     VK_IMAGE_LAYOUT_GENERAL);
 
             // Burn image descriptor
@@ -809,45 +865,95 @@ std::cout<<"create"<<std::endl;
                     shadow->getCubeMapTexture()->view,
                     VK_IMAGE_LAYOUT_GENERAL);
 
+            VkDescriptorSetAllocateInfo allocInfo =
+                vkTools::initializers::descriptorSetAllocateInfo(
+                    descriptorPool,
+                    &descriptorSetLayoutMeterial,
+                    1);
+
+            VkResult vkRes = vkAllocateDescriptorSets(device, &allocInfo, &descriptorSets.paper);
+            assert(!vkRes);
+
+            vkRes = vkAllocateDescriptorSets(device, &allocInfo, &descriptorSets.wood);
+            assert(!vkRes);
+
+            vkRes = vkAllocateDescriptorSets(device, &allocInfo, &descriptorSets.metal);
+            assert(!vkRes);
+
+            allocInfo =
+                vkTools::initializers::descriptorSetAllocateInfo(
+                    descriptorPool,
+                    &descriptorSetLayout,
+                    1);
+
+            vkRes = vkAllocateDescriptorSets(device, &allocInfo, &descriptorSets.scene);
+            assert(!vkRes);
+
             std::vector<VkWriteDescriptorSet> writeDescriptorSets =
             {
+                // Binding 1 : Texture papier
+                vkTools::initializers::writeDescriptorSet(
+                    descriptorSets.paper,
+                    VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                    1,
+                    &texDescriptorPaper),
+                // Binding 1 : Texture bois
+                vkTools::initializers::writeDescriptorSet(
+                    descriptorSets.wood,
+                    VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                    1,
+                    &texDescriptorWood),
+                // Binding 1 : Texture metal
+                vkTools::initializers::writeDescriptorSet(
+                    descriptorSets.metal,
+                    VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                    1,
+                    &texDescriptorMetal),
                 // Binding 0 : Vertex shader uniform buffer
                 vkTools::initializers::writeDescriptorSet(
-                    sceneDescSet,
+                    descriptorSets.scene,
                     VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                     0,
                     &uniformData.scene.descriptor),
-                // Binding 1 : Fragment shader image sampler
-                vkTools::initializers::writeDescriptorSet(
-                    sceneDescSet,
-                    VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                    1,
-                    &texDescriptorColorMap),
                 // Binding 2 : Fragment shader image sampler
                 vkTools::initializers::writeDescriptorSet(
-                    sceneDescSet,
+                    descriptorSets.scene,
                     VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                     2,
                     &texDescriptorBurned),
                 // Binding 3 : Fragment shader image sampler
                 vkTools::initializers::writeDescriptorSet(
-                    sceneDescSet,
+                    descriptorSets.scene,
                     VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                     3,
                     &texDescriptorShadow),
                 // Binding 4 : Lights
                 vkTools::initializers::writeDescriptorSet(
-                    sceneDescSet,
+                    descriptorSets.scene,
                     VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                     4,
                     &lightsStorageBuffer.descriptor)
             };
 
+
+            vkUpdateDescriptorSets(device, 3, writeDescriptorSets.data(), 0, NULL);
+
+
+
             vkUpdateDescriptorSets(device, writeDescriptorSets.size(), writeDescriptorSets.data(), 0, NULL);
 
-            for (auto& cube : cubes)
+            for (auto& cube : metals)
             {
-                std::cout<<"test "<< offset<<std::endl;
+                cube->setupMemory(offset ,pData);
+                offset+=16*4;
+            }
+            for (auto& cube : papers)
+            {
+                cube->setupMemory(offset ,pData);
+                offset+=16*4;
+            }
+            for (auto& cube : woods)
+            {
                 cube->setupMemory(offset ,pData);
                 offset+=16*4;
             }
@@ -909,11 +1015,9 @@ std::cout<<"create"<<std::endl;
         // Color pipeline
         // Load shaders
         std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages;
-        std::cout<<"shaderload1"<<std::endl;
 
         shaderStages[0] = loadShader(getAssetPath() + "shaders/pipelines/base.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
         shaderStages[1] = loadShader(getAssetPath() + "shaders/pipelines/texture.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
-std::cout<<"shaderload2"<<std::endl;
         VkGraphicsPipelineCreateInfo pipelineCreateInfo =
             vkTools::initializers::pipelineCreateInfo(
                 pipelineLayouts.scene,
@@ -930,7 +1034,6 @@ std::cout<<"shaderload2"<<std::endl;
         pipelineCreateInfo.pDynamicState = &dynamicState;
         pipelineCreateInfo.stageCount = shaderStages.size();
         pipelineCreateInfo.pStages = shaderStages.data();
-        std::cout<<"shaderloada"<<std::endl;
 
         VkResult err = vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipelines.scene);
         assert(!err);
@@ -946,8 +1049,6 @@ std::cout<<"shaderload2"<<std::endl;
         blendAttachmentState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
 
         vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipelines.blend);
-        std::cout<<"shaderload3"<<std::endl;
-
     }
 
     void prepareUniformBuffer()
@@ -979,6 +1080,7 @@ std::cout<<"shaderload2"<<std::endl;
         //view = glm::rotate(view, glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
         //ubo.view = glm::translate(view,glm::vec3(-5.0f,zoom,-5.0f));
         ubo.view = glm::translate(view,glm::vec3(-5.0f,0.0f,-5.0f));
+        ubo.AR = (float)(width) / (float)height;
 
         uint8_t *pData;
         VkResult err = vkMapMemory(device, uniformData.scene.memory, 0, sizeof(ubo), 0, (void **)&pData);
@@ -995,20 +1097,20 @@ std::cout<<"shaderload2"<<std::endl;
         assert(validDepthFormat);
 
 		VulkanExampleBase::prepare();
-        loadTextures();std::cout<<"bumbo"<<std::endl;
-        prepareVertices();std::cout<<"bumbo1"<<std::endl;
-        prepareBurningPoints();std::cout<<"bumbo8"<<std::endl;
-        prepareUniformBuffer();std::cout<<"bumbo9"<<std::endl;
-        setupDescriptorSetLayout();std::cout<<"bumbo2"<<std::endl;
-        preparePipelinesCubes();std::cout<<"bumbo3"<<std::endl;
-        setupDescriptorPool();std::cout<<"bumbo4"<<std::endl;
+        loadTextures();
+        prepareVertices();
+        prepareBurningPoints();
+        prepareUniformBuffer();
+        setupDescriptorSetLayout();
+        preparePipelinesCubes();
+        setupDescriptorPool();
         setupLights();
         shadow = new Shadow(device,queue,&lightsStorageBuffer.descriptor,fbDepthFormat,this,&vertices.inputState);
-        setupDescriptorSets();std::cout<<"bumbo5"<<std::endl;
-        buildCommandBuffers();std::cout<<"bumbo6"<<std::endl;
-        buildBulletScene();std::cout<<"bumbo7"<<std::endl;
+        setupDescriptorSets();
+        buildCommandBuffers();
+        buildBulletScene();
 
-        updateUniformBuffers();std::cout<<"bumbo8"<<std::endl;
+        updateUniformBuffers();
 		prepared = true;
 	}
 
@@ -1022,7 +1124,7 @@ std::cout<<"shaderload2"<<std::endl;
 		vkDeviceWaitIdle(device);
         draw();
 		vkDeviceWaitIdle(device);
-        //stop++;
+       //stop++;
 	}
 
 	virtual void viewChanged()
@@ -1079,7 +1181,6 @@ std::cout<<"shaderload2"<<std::endl;
                         //very weak constraint for picking
                         m_pickConstraint->m_setting.m_tau = 0.001f;
 
-                        std::cout<<"grab"<<std::endl;
                     }
                 }
             }
@@ -1126,11 +1227,10 @@ std::cout<<"shaderload2"<<std::endl;
             m_pickedConstraint = NULL;
             m_pickedBody->setDeactivationTime( 0.f );
             m_pickedBody = NULL;
-            std::cout<<"release"<<std::endl;
         }
     }
 
-    void loadBurningMesh(std::string filename,glm::vec3 scale,uint32_t* objectNumber){
+    VulkanObject* loadBurningMesh(std::string filename,glm::vec3 scale,glm::mat4 model, SceneMaterial mater, uint32_t objectNumber){
         VulkanMeshLoader *mesh = new VulkanMeshLoader();
 
         mesh->LoadMesh(filename);
@@ -1139,19 +1239,239 @@ std::cout<<"shaderload2"<<std::endl;
 
         for(int i=0;i<mesh->m_Entries.size();i++){
             burnStart = bPoints.size();
-            for (int j = 0; j < mesh->m_Entries[i].Indices.size(); j++)
-            {
-                bp.pos = glm::vec4(mesh->m_Entries[i].Vertices[mesh->m_Entries[i].Indices[j]].m_pos*scale,0.0f);
-                bp.basePos = glm::vec4(mesh->m_Entries[i].Vertices[mesh->m_Entries[i].Indices[j]].m_pos*scale,1.0f);
-                bp.normal= bp.baseNorm = glm::vec4(mesh->m_Entries[i].Vertices[mesh->m_Entries[i].Indices[j]].m_normal,0.0f);
-                bp.uvCoord = mesh->m_Entries[i].Vertices[mesh->m_Entries[i].Indices[j]].m_tex;
-                bp.nCount = 0;
-                bPoints.push_back(bp);
+            if(mater.life<=0.0f){
+                for (int j = mesh->m_Entries[i].Indices.size()-1;j>=0; j--)
+                {
+                    bp.pos = glm::vec4(mesh->m_Entries[i].Vertices[mesh->m_Entries[i].Indices[j]].m_pos*scale,0.0f);
+                    bp.basePos = glm::vec4(mesh->m_Entries[i].Vertices[mesh->m_Entries[i].Indices[j]].m_pos*scale,1.0f);
+                    bp.normal= bp.baseNorm = glm::vec4(mesh->m_Entries[i].Vertices[mesh->m_Entries[i].Indices[j]].m_normal*glm::vec3(1.0f,-1.0f,1.0f),0.0f);
+                    bp.uvCoord = mesh->m_Entries[i].Vertices[mesh->m_Entries[i].Indices[j]].m_tex;
+                    bp.nCount = 0;
+                    bPoints.push_back(bp);
 
+                }
+                return new VulkanMesh(device,this,queue,mesh->m_Entries[i].Indices,materiaux.papier,model,objectNumber,burnStart,bPoints);
             }
-            glm::mat4 bob = glm::translate(glm::mat4(),glm::vec3(2,6,2));
-            cubes.push_back(new VulkanMesh(device,this,queue,mesh->m_Entries[i].Indices,true,bob,1,*objectNumber,burnStart,bPoints));
+            else{
+
+                std::vector<Vertex> vBuffer;
+                vBuffer.clear();
+                vBuffer.resize(mesh->m_Entries[i].Indices.size());
+                for (int j = 0; j<mesh->m_Entries[i].Indices.size(); j++)
+                {
+                    vBuffer[j].pos = mesh->m_Entries[i].Vertices[mesh->m_Entries[i].Indices[j]].m_pos*scale;
+                    vBuffer[j].uv = mesh->m_Entries[i].Vertices[mesh->m_Entries[i].Indices[j]].m_tex;
+                    vBuffer[j].normal = mesh->m_Entries[i].Vertices[mesh->m_Entries[i].Indices[j]].m_normal;
+                }
+                return new VulkanMesh(device,this,queue,vBuffer,materiaux.papier,model,objectNumber,burnStart,bPoints);
+            }
         }
+    }
+
+    void createAttachment(VkFormat format, VkImageUsageFlagBits usage, FrameBufferAttachment *attachment, VkCommandBuffer layoutCmd, bool depthSample = false)
+    {
+        VkImageAspectFlags aspectMask = 0;
+        VkImageLayout imageLayout;
+
+        attachment->format = format;
+
+        if (usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
+        {
+            aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        }
+        if (usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)
+        {
+            aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+            imageLayout = depthSample ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            //attachment->isDepth = true;
+        }
+
+        assert(aspectMask > 0);
+
+        VkImageCreateInfo image = vkTools::initializers::imageCreateInfo();
+        image.imageType = VK_IMAGE_TYPE_2D;
+        image.format = format;
+        image.extent.width = deferredFb.width;
+        image.extent.height = deferredFb.height;
+        image.extent.depth = 1;
+        image.mipLevels = 1;
+        image.arrayLayers = 1;
+        image.samples = VK_SAMPLE_COUNT_1_BIT;
+        image.tiling = VK_IMAGE_TILING_OPTIMAL;
+        image.usage = usage | VK_IMAGE_USAGE_SAMPLED_BIT;
+
+        VkMemoryAllocateInfo memAlloc = vkTools::initializers::memoryAllocateInfo();
+        VkMemoryRequirements memReqs;
+
+        VK_CHECK_RESULT(vkCreateImage(device, &image, nullptr, &attachment->image));
+        vkGetImageMemoryRequirements(device, attachment->image, &memReqs);
+        memAlloc.allocationSize = memReqs.size;
+        memAlloc.memoryTypeIndex = getMemoryType(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        VK_CHECK_RESULT(vkAllocateMemory(device, &memAlloc, nullptr, &attachment->mem));
+        VK_CHECK_RESULT(vkBindImageMemory(device, attachment->image, attachment->mem, 0));
+
+        if (usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
+        {
+            // Set the initial layout to shader read instead of attachment
+            // This is done as the render loop does the actualy image layout transitions
+            vkTools::setImageLayout(
+                layoutCmd,
+                attachment->image,
+                aspectMask,
+                VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        }
+        else
+        {
+            vkTools::setImageLayout(
+                layoutCmd,
+                attachment->image,
+                aspectMask,
+                VK_IMAGE_LAYOUT_UNDEFINED,
+                imageLayout);
+        }
+
+        VkImageViewCreateInfo imageView = vkTools::initializers::imageViewCreateInfo();
+        imageView.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        imageView.format = format;
+        imageView.subresourceRange = {};
+        imageView.subresourceRange.aspectMask = aspectMask;
+        imageView.subresourceRange.baseMipLevel = 0;
+        imageView.subresourceRange.levelCount = 1;
+        imageView.subresourceRange.baseArrayLayer = 0;
+        imageView.subresourceRange.layerCount = 1;
+        imageView.image = attachment->image;
+        VK_CHECK_RESULT(vkCreateImageView(device, &imageView, nullptr, &attachment->view));
+    }
+
+    // Prepare the framebuffer for offscreen rendering with multiple attachments used as render targets inside the fragment shaders
+    void deferredSetup()
+    {
+        VkCommandBuffer layoutCmd = VulkanExampleBase::createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+
+        deferredFb.width = FB_DIM;
+        deferredFb.height = FB_DIM;
+
+        // Four attachments (3 color, 1 depth)
+        deferredFb.attachments.resize(4);
+
+        // Color attachments
+        // Attachment 0: (World space) Positions
+        createAttachment(
+            VK_FORMAT_R16G16B16A16_SFLOAT,
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+            &deferredFb.attachments[0],
+            layoutCmd);
+
+        // Attachment 1: (World space) Normals
+        createAttachment(
+            VK_FORMAT_R16G16B16A16_SFLOAT,
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+            &deferredFb.attachments[1],
+            layoutCmd);
+
+        // Attachment 1: Albedo (color)
+        createAttachment(
+            VK_FORMAT_R8G8B8A8_UNORM,
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+            &deferredFb.attachments[2],
+            layoutCmd);
+
+        // Depth attachment
+        // Find a suitable depth format
+        VkFormat attDepthFormat;
+        VkBool32 validDepthFormat = vkTools::getSupportedDepthFormat(physicalDevice, &attDepthFormat);
+        assert(validDepthFormat);
+
+        createAttachment(
+            attDepthFormat,
+            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+            &deferredFb.attachments[3],
+            layoutCmd);
+
+        VulkanExampleBase::flushCommandBuffer(layoutCmd, queue, true);
+
+        // Set up separate renderpass with references
+        // to the color and depth attachments
+
+        std::array<VkAttachmentDescription, 4> attachmentDescs = {};
+
+        // Init attachment properties
+        for (uint32_t i = 0; i < 4; ++i)
+        {
+            attachmentDescs[i].samples = VK_SAMPLE_COUNT_1_BIT;
+            attachmentDescs[i].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            attachmentDescs[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+            attachmentDescs[i].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+            attachmentDescs[i].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            attachmentDescs[i].format = deferredFb.attachments[i].format;
+            if (i == 3)
+            {
+                attachmentDescs[i].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+                attachmentDescs[i].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            }
+            else
+            {
+                attachmentDescs[i].initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                attachmentDescs[i].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            }
+        }
+
+        std::vector<VkAttachmentReference> colorReferences;
+        colorReferences.push_back({ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL });
+        colorReferences.push_back({ 1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL });
+        colorReferences.push_back({ 2, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL });
+
+        VkAttachmentReference depthReference = {};
+        depthReference.attachment = 3;
+        depthReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+        VkSubpassDescription subpass = {};
+        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        subpass.pColorAttachments = colorReferences.data();
+        subpass.colorAttachmentCount = static_cast<uint32_t>(colorReferences.size());
+        subpass.pDepthStencilAttachment = &depthReference;
+
+        VkRenderPassCreateInfo renderPassInfo = {};
+        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+        renderPassInfo.pAttachments = attachmentDescs.data();
+        renderPassInfo.attachmentCount = static_cast<uint32_t>(attachmentDescs.size());
+        renderPassInfo.subpassCount = 1;
+        renderPassInfo.pSubpasses = &subpass;
+        VK_CHECK_RESULT(vkCreateRenderPass(device, &renderPassInfo, nullptr, &deferredFb.renderPass));
+
+        std::vector<VkImageView> attachments;
+        for (auto attachment : deferredFb.attachments)
+        {
+            attachments.push_back(attachment.view);
+        }
+
+        VkFramebufferCreateInfo fbufCreateInfo = {};
+        fbufCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        fbufCreateInfo.pNext = NULL;
+        fbufCreateInfo.renderPass = deferredFb.renderPass;
+        fbufCreateInfo.pAttachments = attachments.data();
+        fbufCreateInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+        fbufCreateInfo.width = deferredFb.width;
+        fbufCreateInfo.height = deferredFb.height;
+        fbufCreateInfo.layers = 1;
+
+        VK_CHECK_RESULT(vkCreateFramebuffer(device, &fbufCreateInfo, nullptr, &deferredFb.frameBuffer));
+        // Create sampler to sample from the color attachments
+        VkSamplerCreateInfo sampler = vkTools::initializers::samplerCreateInfo();
+        sampler.magFilter = VK_FILTER_LINEAR;
+        sampler.minFilter = VK_FILTER_LINEAR;
+        sampler.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        sampler.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        sampler.addressModeV = sampler.addressModeU;
+        sampler.addressModeW = sampler.addressModeU;
+        sampler.mipLodBias = 0.0f;
+        sampler.maxAnisotropy = 0;
+        sampler.minLod = 0.0f;
+        sampler.maxLod = 1.0f;
+        sampler.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+        VK_CHECK_RESULT(vkCreateSampler(device, &sampler, nullptr, &deferredFb.sampler));
     }
 };
 VulkanExample *vulkanExample;
