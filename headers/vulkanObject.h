@@ -80,7 +80,7 @@ protected:
         uint32_t p1index;
         uint32_t p2index;
         uint32_t p3index;
-
+        //Le traingle est placé sur le plan XY
         u = glm::normalize(v2.pos-v1.pos);
         w = glm::normalize(glm::cross(v3.pos-v1.pos,u));
         v = glm::cross(u,w);
@@ -125,6 +125,7 @@ protected:
         dt.getTrianglePointers(vTriangles2);
         uint32_t start = allPoints.size()-burnStart;
         for(int i=0;i<vPPoints.size();i++){
+            //Les points sont retournés sur leur plan initial.
             a =mat*glm::vec3(vPPoints[i]->x(),vPPoints[i]->y(),z);
             bp.pos = glm::vec4(a,0.0f);
             bp.basePos = glm::vec4(a,1.0f);

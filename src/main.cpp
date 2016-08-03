@@ -32,7 +32,7 @@
 #include "Shadow.h"
 
 #define VERTEX_BUFFER_BIND_ID 0
-#define ENABLE_VALIDATION true
+#define ENABLE_VALIDATION false
 
 class VulkanExample: public VulkanExampleBase 
 {
@@ -63,6 +63,7 @@ private:
     btRigidBody* selectBody;
     float time = 0;
 
+    //Matrice de projection et de vue pour la scene
     struct{
         glm::mat4 projection;
         glm::mat4 view;
@@ -75,6 +76,7 @@ private:
        glm::vec4 pos;
     };
 
+    //Permet d'obtenir les coordonnées monde de la souris
     glm::vec4 getRayTo(float x, float y){
         float fw = (float)width;
         float fh = (float)height;
@@ -100,6 +102,7 @@ public:
 		std::vector<VkVertexInputAttributeDescription> attributeDescriptions;
 	} vertices;
 
+    //Textures et sampler pour les particules de feu
     struct {
         vkTools::VulkanTexture smoke;
         vkTools::VulkanTexture fire;
@@ -116,6 +119,7 @@ public:
         vkMeshLoader::VERTEX_LAYOUT_NORMAL
     };
 
+    //Monde de simulation de Bullet
     btDiscreteDynamicsWorld* dynamicsWorld;
 
     std::vector<VulkanObject*> papers;
@@ -174,6 +178,7 @@ public:
 
 	VulkanExample() : VulkanExampleBase(ENABLE_VALIDATION)
 	{
+        //Caractéristique initiale de la caméra
         zoom = -15.0f;
         rotation = glm::vec3(30.0f, 0.0f, 0.0f);
 		title = "Vulkan Example - Using pipelines";
@@ -231,6 +236,7 @@ public:
 
 	}
 
+    //La fonction textureLoader->loadTexture vient du tutoriel. Parmet de charger une texture dans le GPU
     void loadTextures()
     {
         textureLoader->loadTexture(
@@ -293,11 +299,14 @@ public:
         assert(!err);
     }
 
+    //Création des commandes pour le rendu et compute shader.
+    //C'est ce qui se retrouverait dans la boucle while 1 deOpenGL
     void buildCommandBuffers()
     {
 
         computeCommand = createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY,true);
 
+        //Exécution des compute shaders
         fire->compute(computeCommand);
 
         vkEndCommandBuffer(computeCommand);
@@ -325,6 +334,7 @@ public:
 
         VkResult err;
 
+        //Il y a deux commandes une pour chaque image du swapchain.
         for (int32_t i = 0; i < drawCmdBuffers.size(); ++i)
         {
 
@@ -346,8 +356,10 @@ public:
             err = vkBeginCommandBuffer(drawCmdBuffers[i], &cmdBufInfo);
             assert(!err);
 
+            //Construction du shadow cube map pour la première lumière
             shadow->buildOffscreenCommandBuffer(drawCmdBuffers[i],allObjects,&bPointsStorageBuffer.buffer,0);
 
+            //Nouvelle image alors le framebuffer est effacé (equivalent de GL_CLEAR)
             renderPassBeginInfo.clearValueCount = 2;
             renderPassBeginInfo.pClearValues = clearValues;
             renderPassBeginInfo.renderPass = renderPass;
@@ -361,6 +373,7 @@ public:
 
             pCostant.index=0;
 
+            //L'index de la lumière en cours est transféré au fragment shader.
             vkCmdPushConstants(
                 drawCmdBuffers[i],
                 pipelineLayouts.scene,
@@ -369,6 +382,7 @@ public:
                 8,
                 &pCostant);
 
+            //La texture de papier est binder pour dessiner les objets en papier
             sets[1] = descriptorSets.paper;
             vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayouts.scene, 0, 2,sets , 0, NULL);
 
@@ -377,6 +391,7 @@ public:
                 cube->draw(drawCmdBuffers[i], &bPointsStorageBuffer.buffer);
             }
 
+            //La texture de bois est binder pour dessiner les objets en bois
             sets[1] = descriptorSets.wood;
             vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayouts.scene, 0, 2,sets , 0, NULL);
 
@@ -385,6 +400,7 @@ public:
                 cube->draw(drawCmdBuffers[i], &bPointsStorageBuffer.buffer);
             }
 
+            //La texture de papier est binder pour dessiner les objets en métal
             sets[1] = descriptorSets.metal;
             vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayouts.scene, 0, 2,sets , 0, NULL);
 
@@ -393,6 +409,7 @@ public:
                 cube->draw(drawCmdBuffers[i], &bPointsStorageBuffer.buffer);
             }
 
+            //Pour les prochaine lumière on enléve le clear parce qu'on veut additionner les valeurs de couleur. Nouveau renderpass dans lequel il n'y a pas de clear.
             renderPassBeginInfo.clearValueCount = 0;
             renderPassBeginInfo.pClearValues = VK_NULL_HANDLE;
             renderPassBeginInfo.renderPass = renderPassBlend;
@@ -408,6 +425,7 @@ public:
 
                 vkCmdSetViewport(drawCmdBuffers[i], 0, 1, &viewport);
                 vkCmdSetScissor(drawCmdBuffers[i], 0, 1, &scissor);
+                //Utilisation d'un pipeline qui va additionner la couleur calculée avec la couleur déjà en place dans le buffer.
                 vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.blend);
 
                 pCostant.index=j;
@@ -444,7 +462,7 @@ public:
                     cube->draw(drawCmdBuffers[i], &bPointsStorageBuffer.buffer);
                 }
             }
-
+            //Les particules sont dessinées
             fire->draw(drawCmdBuffers[i]);
 
             vkCmdEndRenderPass(drawCmdBuffers[i]);
@@ -467,6 +485,7 @@ public:
         ///the default constraint solver. For parallel processing you can use a different solver (see Extras/BulletMultiThreaded)
         btSequentialImpulseConstraintSolver* solver = new btSequentialImpulseConstraintSolver;
 
+        //Ajout de plans pour borner la simulation.
         btCollisionShape* plan1 = new btStaticPlaneShape(btVector3(-1,0,0),-10);
         btRigidBody::btRigidBodyConstructionInfo
                         groundRigidBodyCI1(0, NULL, plan1, btVector3(0, 0, 0));
@@ -507,6 +526,7 @@ public:
 
 	void draw()
 	{
+        //Vient du tutoriel.
         VulkanExampleBase::prepareFrame();
 
         //Shadow Map
@@ -540,6 +560,7 @@ public:
         submitInfo.pCommandBuffers = &drawCmdBuffers[currentBuffer];
         VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE));
 
+        //Vient du tutoriel. Affiche le frame buffer
         VulkanExampleBase::submitFrame();
 	}
 
@@ -571,6 +592,7 @@ public:
         allObjects.insert(allObjects.end(),woods.begin(),woods.end());
     }
 
+    //Envois du tableau de lumière dans le GPU
     void setupLights(){
         uint32_t storageBufferSize = lights.size() * sizeof(glm::vec4);
 
@@ -617,6 +639,8 @@ public:
         lightsStorageBuffer.descriptor.offset = 0;
     }
 
+    //Les poits émetteurs sont envoyés sur le GPU et les éléments de ces derniers qui seront utilisés dans
+    //le vertex shader sont décrits
     void prepareBurningPoints(){
         // Setup and fill the compute shader storage buffers for
         // vertex positions and velocities
@@ -737,6 +761,7 @@ public:
 		assert(!vkRes);
 	}
 
+    //DescriptorLayout décrit quel type de données seront Binder au shaders.
 	void setupDescriptorSetLayout()
 	{
 
@@ -810,11 +835,13 @@ public:
 
 	}
 
+    //Les descriptorSet disent quelles données seront associés aux types définis dans le ou les descriptorLayout.
     void setupDescriptorSets()
     {
 
         VkDeviceSize  size = 16*4*allObjects.size();
         if(size>0){
+            //Réserve un espace mémoire sur le GPU pour les matrices modèles
             createBuffer(
                 VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
@@ -938,10 +965,9 @@ public:
 
             vkUpdateDescriptorSets(device, 3, writeDescriptorSets.data(), 0, NULL);
 
-
-
             vkUpdateDescriptorSets(device, writeDescriptorSets.size(), writeDescriptorSets.data(), 0, NULL);
 
+            //Dis aux objets quelle partie de l'espace mémoire de matrices modèles ils doivent transférer leur matrice modèle.
             for (auto& cube : metals)
             {
                 cube->setupMemory(offset ,pData);
@@ -1160,7 +1186,6 @@ public:
             rayCallback
         );
         if(rayCallback.hasHit()) {
-            std::cout << "hit called "<< rayCallback.m_hitPointWorld.x() << " " << rayCallback.m_hitPointWorld.y() << " " << rayCallback.m_hitPointWorld.z()<< std::endl;
             m_pickPos = rayCallback.m_hitPointWorld;
             if(grab){
                 btRigidBody* pBody = btRigidBody::upcast(rayCallback.m_collisionObject);
@@ -1233,6 +1258,7 @@ public:
     VulkanObject* loadBurningMesh(std::string filename,glm::vec3 scale,glm::mat4 model, SceneMaterial mater, uint32_t objectNumber){
         VulkanMeshLoader *mesh = new VulkanMeshLoader();
 
+        //mesh->LoadMesh est une fonction du tutoriel
         mesh->LoadMesh(filename);
         int burnStart=0;
         BurningPoint bp;
@@ -1268,6 +1294,7 @@ public:
         }
     }
 
+    //Pas utilisé
     void createAttachment(VkFormat format, VkImageUsageFlagBits usage, FrameBufferAttachment *attachment, VkCommandBuffer layoutCmd, bool depthSample = false)
     {
         VkImageAspectFlags aspectMask = 0;
@@ -1345,6 +1372,7 @@ public:
         VK_CHECK_RESULT(vkCreateImageView(device, &imageView, nullptr, &attachment->view));
     }
 
+    //Pas utilisé
     // Prepare the framebuffer for offscreen rendering with multiple attachments used as render targets inside the fragment shaders
     void deferredSetup()
     {

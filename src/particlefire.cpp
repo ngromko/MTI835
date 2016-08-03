@@ -459,6 +459,7 @@ void VulkanFire::prepareComputePipelines(std::string assetPath){
     VK_CHECK_RESULT(vkCreateComputePipelines(device, pipelineCache, 1, &computePipelineCreateInfo, nullptr, &fillGridPipeline));
 }
 
+//Création de la commande permet de partir un feu avec clic molette
 void VulkanFire::createClickCommand(VkCommandPool cmdPool){
 
     int bGroups  = 1;
@@ -486,11 +487,11 @@ void VulkanFire::createClickCommand(VkCommandPool cmdPool){
     vkEndCommandBuffer(clickCmd);
 }
 
+//Exécute la commande pour partir un feu avec la molette
 void VulkanFire::cliked(VkQueue queue, glm::vec4 pos){
     computeUbo.clickPos = pos;
 
     memcpy(computeUniformBuffer.mapped, &computeUbo, sizeof(computeUbo));
-
     VkSubmitInfo submitInfo = vkTools::initializers::submitInfo();
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &clickCmd;
@@ -728,11 +729,7 @@ void VulkanFire::prepareUniformBuffers()
 
 void VulkanFire::updateTime(float frameTimer)
 {
-    /*computeUbo.deltaT = frameTimer * -0.5f;*/
-    //computeUbo.bPointsCount = 2;
     computeUbo.deltaT= frameTimer;//glm::vec4(1,6,1,frameTimer);
-
-    computeUbo.clickPos = glm::vec4(5,2,3,4);
     memcpy(computeUniformBuffer.mapped, &computeUbo, sizeof(computeUbo));
 }
 
